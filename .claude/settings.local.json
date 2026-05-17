@@ -1,0 +1,12 @@
+{
+  "permissions": {
+    "allow": [
+      "PowerShell(Get-ChildItem -Recurse -Path backend -Exclude venv | Where-Object { $_.PSIsContainer -eq $false } | ForEach-Object { $_.FullName.Replace\\(\"D:\\\\Wed-dev\\\\xiangmulianxi\\\\Clinical Agentic RAG\\\\\", \"\"\\) })",
+      "PowerShell(Get-Command *)",
+      "PowerShell(Get-ChildItem -Path \"D:\\\\Wed-dev\\\\xiangmulianxi\\\\Clinical Agentic RAG\\\\backend\" -Directory | Where-Object { $_.Name -notin @\\(\"venv\", \"chroma_db\", \"postgres_data\", \".idea\", \"__pycache__\"\\) } | Select-Object Name; Get-ChildItem -Path \"D:\\\\Wed-dev\\\\xiangmulianxi\\\\Clinical Agentic RAG\\\\backend\\\\api\" -Recurse 2>$null | Select-Object FullName; Get-ChildItem -Path \"D:\\\\Wed-dev\\\\xiangmulianxi\\\\Clinical Agentic RAG\\\\backend\\\\services\" -Recurse 2>$null | Select-Object FullName)",
+      "PowerShell(Start-Sleep -Seconds 2; $response = Invoke-WebRequest -Uri \"http://localhost:8000/\" -UseBasicParsing -TimeoutSec 5; $response.Content)",
+      "PowerShell($body = '{\"query\": \"患者男，58岁，高血压病史10年。近一周出现头晕、视物模糊，血压165/95mmHg。请问应如何调整治疗方案？\"}'; $response = Invoke-WebRequest -Uri \"http://localhost:8000/api/chat/agent\" -Method POST -Body $body -ContentType \"application/json\" -UseBasicParsing -TimeoutSec 120; $response.Content)",
+      "PowerShell(Stop-Process *)"
+    ]
+  }
+}

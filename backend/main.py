@@ -6,6 +6,8 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from api.endpoints.chat import router as chat_router
+from api.endpoints.auth import router as auth_router
+from api.endpoints.appointment import router as appointment_router
 
 
 @asynccontextmanager
@@ -37,6 +39,8 @@ app.add_middleware(
 
 # 注册路由
 app.include_router(chat_router, prefix="/api/chat", tags=["AI 临床诊疗对话"])
+app.include_router(auth_router, prefix="/api/auth", tags=["认证与授权"])
+app.include_router(appointment_router, prefix="/api/appointments", tags=["预约挂号"])
 
 
 @app.get("/", tags=["健康检查"])

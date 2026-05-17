@@ -23,6 +23,13 @@ class Settings(BaseSettings):
     # PostgreSQL 异步连接 URL（格式：postgresql+asyncpg://用户:密码@主机:端口/库名）
     DATABASE_URL: str
 
+    # JWT 密钥（生产环境应使用强随机字符串）
+    SECRET_KEY: str = "clinical-agentic-rag-secret-key-change-in-production"
+    # JWT 签名算法
+    ALGORITHM: str = "HS256"
+    # Token 过期时间（分钟）
+    ACCESS_TOKEN_EXPIRE_MINUTES: int = 60 * 24
+
     # 应用运行端口
     APP_PORT: int = 8000
 

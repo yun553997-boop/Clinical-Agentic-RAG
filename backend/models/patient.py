@@ -4,12 +4,9 @@ ORM 模型层：患者表 (patients) 与就诊记录表 (medical_records)。
 """
 from datetime import datetime
 from sqlalchemy import BigInteger, ForeignKey, String, Text, DateTime, func
-from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
+from sqlalchemy.orm import Mapped, mapped_column, relationship
 
-
-class Base(DeclarativeBase):
-    """SQLAlchemy 声明式基类。"""
-    pass
+from models import Base
 
 
 class Patient(Base):

@@ -42,6 +42,12 @@ const router = createRouter({
           component: () => import('@/views/doctor/AiWorkspace.vue'),
           meta: { title: 'AI 辅助会诊' },
         },
+        {
+          path: 'knowledge',
+          name: 'DoctorKnowledge',
+          component: () => import('@/views/doctor/KnowledgeBase.vue'),
+          meta: { title: '指南知识库管理' },
+        },
       ],
     },
 
@@ -63,6 +69,12 @@ const router = createRouter({
           name: 'PatientAppointment',
           component: () => import('@/views/patient/Appointment.vue'),
           meta: { title: '预约挂号' },
+        },
+        {
+          path: 'records',
+          name: 'PatientRecords',
+          component: () => import('@/views/patient/Records.vue'),
+          meta: { title: '我的预约记录' },
         },
       ],
     },

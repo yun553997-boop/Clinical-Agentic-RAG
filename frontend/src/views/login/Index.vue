@@ -15,18 +15,10 @@ const rememberMe = ref(false)
 
 const currentForm = computed(() => (activeTab.value === 'doctor' ? doctorForm : patientForm))
 
-const VALID_PASSWORD = '111111'
-
 async function handleLogin() {
   const form = currentForm.value
   if (!form.account.trim() || !form.password.trim()) {
     ElMessage.warning('请输入账号和密码')
-    return
-  }
-
-  // 密码校验
-  if (form.password !== VALID_PASSWORD) {
-    ElMessage.error('密码错误，默认为 111111')
     return
   }
 
@@ -71,7 +63,7 @@ function goRegister(role: 'doctor' | 'patient') {
         </div>
       </template>
 
-      <!-- 登录选项卡：对称布局 + 无底线 + 主题色高亮 -->
+      <!-- 登录选项卡 -->
       <div class="flex mb-5">
         <div
           class="flex-1 text-center py-3 cursor-pointer text-base font-bold transition-colors select-none"
@@ -93,7 +85,7 @@ function goRegister(role: 'doctor' | 'patient') {
         </div>
       </div>
 
-      <!-- ═══════ 用户登录 ═══════ -->
+      <!-- 用户登录 -->
       <div v-show="activeTab === 'patient'">
         <el-form
           label-position="top"
@@ -129,7 +121,6 @@ function goRegister(role: 'doctor' | 'patient') {
             </el-input>
           </el-form-item>
 
-          <!-- 自动登录 / 忘记密码 -->
           <div class="flex items-center justify-between -mt-2 mb-2">
             <el-checkbox v-model="rememberMe" :disabled="loading" size="small">
               下次自动登录
@@ -139,7 +130,6 @@ function goRegister(role: 'doctor' | 'patient') {
             </el-button>
           </div>
 
-          <!-- 登录按钮：胶囊形 + 蓝色 -->
           <el-button
             type="primary"
             size="large"
@@ -150,7 +140,6 @@ function goRegister(role: 'doctor' | 'patient') {
             用户登录
           </el-button>
 
-          <!-- 注册按钮：字体按钮 -->
           <div class="text-center mt-4">
             <el-button type="primary" link @click="goRegister('patient')">
               注册新用户
@@ -159,7 +148,7 @@ function goRegister(role: 'doctor' | 'patient') {
         </el-form>
       </div>
 
-      <!-- ═══════ 医生登录 ═══════ -->
+      <!-- 医生登录 -->
       <div v-show="activeTab === 'doctor'">
         <el-form
           label-position="top"
@@ -195,7 +184,6 @@ function goRegister(role: 'doctor' | 'patient') {
             </el-input>
           </el-form-item>
 
-          <!-- 自动登录 / 忘记密码 -->
           <div class="flex items-center justify-between -mt-2 mb-2">
             <el-checkbox v-model="rememberMe" :disabled="loading" size="small">
               下次自动登录
@@ -205,7 +193,6 @@ function goRegister(role: 'doctor' | 'patient') {
             </el-button>
           </div>
 
-          <!-- 登录按钮：胶囊形 + 蓝色 -->
           <el-button
             type="primary"
             size="large"
@@ -216,7 +203,6 @@ function goRegister(role: 'doctor' | 'patient') {
             医生登录
           </el-button>
 
-          <!-- 注册按钮：字体按钮 -->
           <div class="text-center mt-4">
             <el-button type="primary" link @click="goRegister('doctor')">
               注册医生账号
@@ -229,20 +215,17 @@ function goRegister(role: 'doctor' | 'patient') {
 </template>
 
 <style scoped>
-/* ── 半圆形（胶囊形）输入框 ── */
 .pill-input :deep(.el-input__wrapper) {
   border-radius: 24px;
   padding-left: 12px;
 }
 
-/* ── 胶囊形登录按钮 ── */
 .pill-btn {
   border-radius: 24px;
   font-size: 16px;
   letter-spacing: 4px;
 }
 
-/* ── Tab 高亮：Element Plus 主题蓝色 ── */
 .tab-active {
   color: var(--el-color-primary);
 }

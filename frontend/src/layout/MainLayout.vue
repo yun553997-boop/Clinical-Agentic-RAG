@@ -13,12 +13,14 @@ const menuItems = computed(() => {
     return [
       { path: '/doctor/dashboard', title: '今日候诊', icon: 'List' },
       { path: '/doctor/workspace', title: 'AI 辅助会诊', icon: 'Cpu' },
+      { path: '/doctor/knowledge', title: '指南知识库管理', icon: 'Collection' },
     ]
   }
   if (userStore.isPatient) {
     return [
       { path: '/patient/chatbot', title: 'AI 智能导诊', icon: 'ChatDotRound' },
       { path: '/patient/appointment', title: '预约挂号', icon: 'Calendar' },
+      { path: '/patient/records', title: '我的预约记录', icon: 'Document' },
     ]
   }
   return []
@@ -54,7 +56,7 @@ function handleLogout() {
 
       <div class="flex items-center gap-3">
         <span class="text-sm text-slate-500">
-          {{ userStore.userInfo.name }}
+          {{ userStore.fullName }}
           <el-tag size="small" :type="userStore.isDoctor ? 'primary' : 'success'">
             {{ userStore.isDoctor ? '医生' : '患者' }}
           </el-tag>

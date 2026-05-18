@@ -32,6 +32,8 @@ class Appointment(Base):
         Enum(AppointmentStatus), default=AppointmentStatus.pending, nullable=False
     )
     symptoms_desc: Mapped[str] = mapped_column(Text, nullable=True)
+    ai_report: Mapped[str | None] = mapped_column(Text, nullable=True)
+    doctor_advice: Mapped[str | None] = mapped_column(Text, nullable=True)
 
     patient: Mapped["User"] = relationship(
         back_populates="appointments_as_patient", foreign_keys=[patient_id]

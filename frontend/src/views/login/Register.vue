@@ -2,13 +2,11 @@
 import { ref, reactive, computed } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
-import { useUserStore } from '@/stores/user'
+import request from '@/utils/request'
 
 const route = useRoute()
 const router = useRouter()
-const userStore = useUserStore()
 
-// 从 URL query 获取初始角色，默认患者
 const initialRole = (route.query.role as 'doctor' | 'patient') || 'patient'
 const activeTab = ref<'doctor' | 'patient'>(initialRole)
 
@@ -39,32 +37,43 @@ function handleTabChange() {
 async function handleRegister() {
   const form = currentForm.value
 
-  if (!form.account.trim() || !form.password.trim()) {
-    ElMessage.warning('请填写账号和密码')
+  if (!form.account.trim() || !form.name.trim() || !form.password.trim()) {
+    ElMessage.warning('请填写完整信息')
     return
   }
   if (form.password !== form.confirmPassword) {
     ElMessage.warning('两次密码输入不一致')
     return
   }
+  if (activeTab.value === 'doctor' && !doctorForm.department) {
+    ElMessage.warning('请选择所属科室')
+    return
+  }
 
   loading.value = true
   try {
-    // Mock 注册：调用相同的 login 方法模拟账号创建
-    await userStore.login(form.account, form.password)
+    const payload: Record<string, string> = {
+      username: form.account.trim(),
+      password: form.password,
+      full_name: form.name.trim(),
+      role: activeTab.value,
+    }
 
-    // 注册成功后跳回登录页
-    userStore.logout()
-    ElMessage.success('注册成功，请重新登录')
+    if (activeTab.value === 'doctor') {
+      payload.employee_id = form.account.trim()
+      payload.department = doctorForm.department
+    }
+
+    await request.post('/api/auth/register', payload)
+    ElMessage.success('注册成功，请返回登录')
     router.push({ path: '/login', query: { role: activeTab.value } })
   } catch {
-    ElMessage.error('注册失败，请稍后重试')
+    // 错误已在拦截器中统一提示
   } finally {
     loading.value = false
   }
 }
 
-/** 返回登录页 */
 function goLogin() {
   router.push('/login')
 }
@@ -85,7 +94,7 @@ function goLogin() {
         </div>
       </template>
 
-      <!-- 注册选项卡：对称布局 + 醒目字体 -->
+      <!-- 注册选项卡 -->
       <div class="flex border-b border-slate-200 mb-5">
         <div
           class="flex-1 text-center py-3 cursor-pointer text-base font-bold transition-colors"
@@ -107,7 +116,7 @@ function goLogin() {
         </div>
       </div>
 
-      <!-- ═══════ 用户注册表单 ═══════ -->
+      <!-- 用户注册表单 -->
       <div v-show="activeTab === 'patient'">
         <el-form
           label-position="top"
@@ -164,7 +173,7 @@ function goLogin() {
         </el-form>
       </div>
 
-      <!-- ═══════ 医生注册表单 ═══════ -->
+      <!-- 医生注册表单 -->
       <div v-show="activeTab === 'doctor'">
         <el-form
           label-position="top"
@@ -204,6 +213,8 @@ function goLogin() {
               <el-option label="骨科" value="骨科" />
               <el-option label="眼科" value="眼科" />
               <el-option label="皮肤科" value="皮肤科" />
+              <el-option label="消化内科" value="消化内科" />
+              <el-option label="心内科" value="心内科" />
             </el-select>
           </el-form-item>
 

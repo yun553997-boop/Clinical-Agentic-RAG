@@ -6,6 +6,7 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel, Field
 from sqlalchemy import select, and_
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import selectinload
 
 from api.dependencies import get_current_user
 from core.database import get_db
@@ -53,11 +54,17 @@ async def create_appointment(
     if doctor is None or doctor.role != UserRole.doctor:
         raise HTTPException(status_code=400, detail="目标医生不存在")
 
+    # 将可能带时区的 datetime 转为 naive UTC（匹配数据库 DateTime 列类型）
+    appt_time = req.appointment_time
+    if appt_time is not None and appt_time.tzinfo is not None:
+        appt_time = appt_time.replace(tzinfo=None)
+    appt_time = appt_time or datetime.now(timezone.utc).replace(tzinfo=None)
+
     appointment = Appointment(
         patient_id=current_user.id,
         doctor_id=req.doctor_id,
         department=req.department,
-        appointment_time=req.appointment_time or datetime.now(timezone.utc),
+        appointment_time=appt_time,
         status=AppointmentStatus.pending,
         symptoms_desc=req.symptoms_desc,
     )
@@ -86,9 +93,12 @@ async def get_today_appointments(
     if current_user.role != UserRole.doctor:
         raise HTTPException(status_code=403, detail="仅医生可查看今日挂号")
 
-    today_start = datetime.now(timezone.utc).replace(hour=0, minute=0, second=0, microsecond=0)
+    today_start = datetime.now(timezone.utc).replace(
+        hour=0, minute=0, second=0, microsecond=0, tzinfo=None
+    )
     result = await db.execute(
         select(Appointment)
+        .options(selectinload(Appointment.patient))
         .where(
             and_(
                 Appointment.doctor_id == current_user.id,
@@ -113,3 +123,109 @@ async def get_today_appointments(
         )
         for a in appointments
     ]
+
+
+class MyAppointmentResponse(BaseModel):
+    """我的预约记录响应。"""
+    id: int
+    department: str
+    doctor_name: str
+    appointment_time: str
+    status: str
+    symptoms_desc: str | None
+    ai_report: str | None = None
+    doctor_advice: str | None = None
+
+    model_config = {"from_attributes": True}
+
+
+class CompleteAppointmentRequest(BaseModel):
+    """完成会诊请求体。"""
+    ai_report: str = Field(..., description="AI 生成的诊疗报告（Markdown）")
+    doctor_advice: str | None = Field(None, description="医生补充医嘱")
+
+
+@router.get("/my", response_model=list[MyAppointmentResponse])
+async def get_my_appointments(
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """患者查看自己的预约记录，按时间倒序。"""
+    if current_user.role != UserRole.patient:
+        raise HTTPException(status_code=403, detail="仅患者可查看自己的预约记录")
+
+    result = await db.execute(
+        select(Appointment)
+        .options(selectinload(Appointment.doctor))
+        .where(Appointment.patient_id == current_user.id)
+        .order_by(Appointment.appointment_time.desc())
+    )
+    appointments = result.scalars().all()
+
+    return [
+        MyAppointmentResponse(
+            id=a.id,
+            department=a.department,
+            doctor_name=a.doctor.full_name,
+            appointment_time=a.appointment_time.isoformat(),
+            status=a.status.value,
+            symptoms_desc=a.symptoms_desc,
+            ai_report=a.ai_report,
+            doctor_advice=a.doctor_advice,
+        )
+        for a in appointments
+    ]
+
+
+@router.delete("/{appointment_id}")
+async def cancel_appointment(
+    appointment_id: int,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """患者取消自己的预约挂号（物理删除）。"""
+    if current_user.role != UserRole.patient:
+        raise HTTPException(status_code=403, detail="仅患者可取消预约")
+
+    result = await db.execute(
+        select(Appointment).where(Appointment.id == appointment_id)
+    )
+    appointment = result.scalar_one_or_none()
+    if appointment is None:
+        raise HTTPException(status_code=404, detail="预约记录不存在")
+    if appointment.patient_id != current_user.id:
+        raise HTTPException(status_code=403, detail="无权取消他人的预约")
+
+    await db.delete(appointment)
+    await db.commit()
+    return {"message": "取消预约成功"}
+
+
+@router.put("/{appointment_id}/complete")
+async def complete_appointment(
+    appointment_id: int,
+    req: CompleteAppointmentRequest,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """医生完成会诊，提交 AI 报告和医嘱，并将预约状态更新为已完成。"""
+    if current_user.role != UserRole.doctor:
+        raise HTTPException(status_code=403, detail="仅医生可完成会诊")
+
+    result = await db.execute(
+        select(Appointment).where(Appointment.id == appointment_id)
+    )
+    appointment = result.scalar_one_or_none()
+    if appointment is None:
+        raise HTTPException(status_code=404, detail="预约记录不存在")
+    if appointment.doctor_id != current_user.id:
+        raise HTTPException(status_code=403, detail="无权操作他人的预约")
+
+    appointment.ai_report = req.ai_report
+    appointment.doctor_advice = req.doctor_advice
+    appointment.status = AppointmentStatus.completed
+
+    await db.commit()
+    await db.refresh(appointment)
+
+    return {"message": "会诊已完成，报告已发送给患者"}

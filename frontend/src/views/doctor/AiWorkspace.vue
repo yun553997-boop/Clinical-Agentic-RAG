@@ -1,11 +1,23 @@
 <script setup lang="ts">
-import { ref, nextTick, watch } from 'vue'
+import { ref, nextTick, watch, onMounted, computed } from 'vue'
+import { useRoute, useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import MarkdownIt from 'markdown-it'
+import request from '@/utils/request'
+
+const route = useRoute()
+const router = useRouter()
 
 const md = new MarkdownIt({
   breaks: true,
   linkify: true,
+})
+
+// ── appointment_id ──
+const appointmentId = computed(() => {
+  const id = route.query.appointment_id
+  if (id) return Number(id)
+  return null
 })
 
 // ── 表单数据 ──
@@ -16,11 +28,23 @@ const form = ref({
   symptoms: '',
 })
 
+onMounted(() => {
+  if (route.query.patient_name) {
+    form.value.name = route.query.patient_name as string
+  }
+  if (route.query.symptoms) {
+    form.value.symptoms = route.query.symptoms as string
+  }
+})
+
 // ── UI 状态 ──
 const loading = ref(false)
+const submitting = ref(false)
 const toolLogs = ref<{ text: string; kind: string }[]>([])
 const finalReport = ref('')
 const renderedReport = ref('')
+const doctorAdvice = ref('')
+const activeCollapse = ref<string[]>([])
 const terminalRef = ref<HTMLElement | null>(null)
 const reportRef = ref<HTMLElement | null>(null)
 
@@ -134,12 +158,39 @@ async function startConsultation() {
   }
 }
 
+// ── 完成会诊并发送报告 ──
+async function completeConsultation() {
+  if (!appointmentId.value) {
+    ElMessage.error('未获取到挂号单 ID，无法完成会诊')
+    return
+  }
+  if (!finalReport.value.trim()) {
+    ElMessage.warning('请先生成 AI 诊疗报告')
+    return
+  }
+
+  submitting.value = true
+  try {
+    await request.put(`/api/appointments/${appointmentId.value}/complete`, {
+      ai_report: finalReport.value,
+      doctor_advice: doctorAdvice.value || null,
+    })
+    ElMessage.success('会诊已完成，报告已发送给患者')
+    router.push('/doctor/dashboard')
+  } catch {
+    ElMessage.error('提交失败，请重试')
+  } finally {
+    submitting.value = false
+  }
+}
+
 // ── 重置表单 ──
 function resetForm() {
   form.value = { name: '', age: undefined, history: '', symptoms: '' }
   toolLogs.value = []
   finalReport.value = ''
   renderedReport.value = ''
+  doctorAdvice.value = ''
 }
 </script>
 
@@ -257,94 +308,50 @@ function resetForm() {
 
     <!-- ══════════════════════════ 右侧：AI 思考与输出区 ══════════════════════════ -->
     <main class="flex-1 flex flex-col p-5 pl-0 gap-4 min-w-0">
-      <!-- 上半部分：Agent 执行日志（终端风格） -->
-      <el-card
-        shadow="hover"
-        class="flex-1 flex flex-col min-h-0"
-        :body-style="{
-          flex: 1,
-          display: 'flex',
-          flexDirection: 'column',
-          padding: 0,
-          overflow: 'hidden',
-        }"
-      >
-        <template #header>
-          <div class="flex items-center justify-between">
-            <div class="flex items-center gap-2 text-medical-800 font-semibold">
-              <span class="text-lg">🖥️</span>
-              <span>Agent 执行日志</span>
-              <el-tag
-                v-if="loading"
-                type="warning"
-                size="small"
-                effect="dark"
-                round
-              >
-                执行中
-              </el-tag>
-              <el-tag
-                v-else-if="toolLogs.length > 0"
-                type="success"
-                size="small"
-                effect="dark"
-                round
-              >
-                已完成
-              </el-tag>
-            </div>
-            <el-button
-              v-if="toolLogs.length > 0"
-              size="small"
-              text
-              @click="toolLogs = []"
-            >
-              清空日志
-            </el-button>
-          </div>
-        </template>
-
-        <!-- 终端内容区 -->
-        <div
-          ref="terminalRef"
-          class="terminal-scroll flex-1 bg-[#0d1117] text-green-400 font-mono text-sm p-4 overflow-y-auto whitespace-pre-wrap break-words leading-relaxed"
-        >
-          <!-- 空状态 -->
+      <!-- 上半部分：Agent 执行日志（折叠面板） -->
+      <el-collapse v-model="activeCollapse">
+        <el-collapse-item title="⚙️ 查看 AI 思考与工具调用过程" name="logs">
           <div
-            v-if="toolLogs.length === 0"
-            class="text-slate-500 flex items-center justify-center h-full"
+            ref="terminalRef"
+            class="terminal-scroll bg-[#0d1117] text-green-400 font-mono text-sm p-4 overflow-y-auto whitespace-pre-wrap break-words leading-relaxed max-h-[300px]"
           >
-            <div class="text-center">
-              <div class="text-3xl mb-3">🖥️</div>
-              <div>Agent 执行日志将在此实时显示</div>
-              <div class="text-xs mt-1 text-slate-600">
-                请在左侧输入患者信息后点击「请求 AI 会诊」
+            <!-- 空状态 -->
+            <div
+              v-if="toolLogs.length === 0"
+              class="text-slate-500 flex items-center justify-center h-full"
+            >
+              <div class="text-center">
+                <div class="text-3xl mb-3">🖥️</div>
+                <div>Agent 执行日志将在此实时显示</div>
+                <div class="text-xs mt-1 text-slate-600">
+                  请在左侧输入患者信息后点击「请求 AI 会诊」
+                </div>
               </div>
             </div>
+
+            <!-- 日志条目 -->
+            <template v-for="(log, i) in toolLogs" :key="i">
+              <span
+                v-if="log.kind === 'system'"
+                class="text-cyan-400"
+              >{{ log.text }}</span>
+              <span
+                v-else-if="log.kind === 'error'"
+                class="text-red-400"
+              >{{ log.text }}</span>
+              <span
+                v-else
+              >{{ log.text }}</span>
+            </template>
+
+            <!-- 光标闪烁（正在输出中） -->
+            <span
+              v-if="loading"
+              class="inline-block w-2 h-4 bg-green-400 animate-pulse align-middle ml-0.5"
+            >&nbsp;</span>
           </div>
-
-          <!-- 日志条目 -->
-          <template v-for="(log, i) in toolLogs" :key="i">
-            <span
-              v-if="log.kind === 'system'"
-              class="text-cyan-400"
-            >{{ log.text }}</span>
-            <span
-              v-else-if="log.kind === 'error'"
-              class="text-red-400"
-            >{{ log.text }}</span>
-            <span
-              v-else
-            >{{ log.text }}</span>
-          </template>
-
-          <!-- 光标闪烁（正在输出中） -->
-          <span
-            v-if="loading"
-            class="inline-block w-2 h-4 bg-green-400 animate-pulse align-middle ml-0.5"
-          >&nbsp;</span>
-        </div>
-      </el-card>
+        </el-collapse-item>
+      </el-collapse>
 
       <!-- 下半部分：最终报告 -->
       <el-card
@@ -419,6 +426,50 @@ function resetForm() {
             v-html="renderedReport"
           ></div>
         </div>
+      </el-card>
+
+      <!-- 医生复核与发报告区域 -->
+      <el-card
+        v-if="finalReport"
+        shadow="hover"
+      >
+        <template #header>
+          <div class="flex items-center gap-2 text-medical-800 font-semibold">
+            <span class="text-lg">👨‍⚕️</span>
+            <span>医生复核与发送报告</span>
+          </div>
+        </template>
+
+        <el-form label-position="top">
+          <el-form-item label="医生补充医嘱 (可选)">
+            <el-input
+              v-model="doctorAdvice"
+              type="textarea"
+              :rows="4"
+              placeholder="请输入补充医嘱、用药建议、复诊安排等……"
+              :disabled="submitting"
+            />
+          </el-form-item>
+
+          <div class="flex items-center justify-between">
+            <div
+              v-if="!appointmentId"
+              class="text-amber-600 text-sm flex items-center gap-2"
+            >
+              <span>⚠️</span>
+              <span>未关联挂号单 ID，请从候诊列表进入</span>
+            </div>
+            <el-button
+              type="primary"
+              size="large"
+              :loading="submitting"
+              :disabled="!appointmentId || !finalReport"
+              @click="completeConsultation"
+            >
+              {{ submitting ? '提交中…' : '🏁 结束会诊并发送报告给患者' }}
+            </el-button>
+          </div>
+        </el-form>
       </el-card>
     </main>
   </div>

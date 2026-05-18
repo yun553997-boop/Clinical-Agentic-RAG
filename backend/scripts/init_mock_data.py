@@ -10,7 +10,7 @@ import os
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from core.database import async_engine
-from models import Base, Patient, MedicalRecord, User, Appointment
+from models import Base, Patient, MedicalRecord, User, Appointment, KnowledgeDoc
 from models.user import UserRole
 from core.security import get_password_hash
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker

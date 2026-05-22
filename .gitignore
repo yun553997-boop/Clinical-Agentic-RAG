@@ -17,3 +17,5 @@ backend/.idea/
 backend/__pycache__/
 backend/.env
 backend/data/
+
+plan/

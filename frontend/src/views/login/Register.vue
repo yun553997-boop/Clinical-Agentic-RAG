@@ -80,14 +80,14 @@ function goLogin() {
 </script>
 
 <template>
-  <div class="min-h-screen flex items-center justify-center bg-gradient-to-br from-slate-100 via-blue-50 to-slate-200 py-8">
-    <el-card class="w-[480px] shadow-xl">
+  <div class="h-screen flex items-center justify-center bg-gradient-to-br from-slate-100 via-blue-50 to-slate-200">
+    <el-card class="w-[440px] shadow-xl">
       <template #header>
         <div class="text-center">
           <div
-            class="w-12 h-12 rounded-lg bg-gradient-to-br from-emerald-600 to-teal-500 flex items-center justify-center shadow-md mx-auto mb-2"
+            class="w-12 h-12 rounded-lg bg-gradient-to-br from-blue-700 to-blue-500 flex items-center justify-center shadow-md mx-auto mb-2"
           >
-            <span class="text-white text-xl font-bold">✦</span>
+            <span class="text-white text-xl font-bold">+</span>
           </div>
           <h2 class="text-lg font-bold text-slate-800">创建新账户</h2>
           <p class="text-xs text-slate-400 mt-1">注册加入智能临床诊疗平台</p>
@@ -95,20 +95,20 @@ function goLogin() {
       </template>
 
       <!-- 注册选项卡 -->
-      <div class="flex border-b border-slate-200 mb-5">
+      <div class="flex mb-5">
         <div
-          class="flex-1 text-center py-3 cursor-pointer text-base font-bold transition-colors"
+          class="flex-1 text-center py-3 cursor-pointer text-base font-bold transition-colors select-none"
           :class="activeTab === 'patient'
-            ? 'text-green-600 border-b-2 border-green-600 -mb-[1px]'
+            ? 'tab-active'
             : 'text-slate-400 hover:text-slate-600'"
           @click="activeTab = 'patient'; handleTabChange()"
         >
           🙋 用户注册
         </div>
         <div
-          class="flex-1 text-center py-3 cursor-pointer text-base font-bold transition-colors"
+          class="flex-1 text-center py-3 cursor-pointer text-base font-bold transition-colors select-none"
           :class="activeTab === 'doctor'
-            ? 'text-blue-700 border-b-2 border-blue-700 -mb-[1px]'
+            ? 'tab-active'
             : 'text-slate-400 hover:text-slate-600'"
           @click="activeTab = 'doctor'; handleTabChange()"
         >
@@ -128,7 +128,12 @@ function goLogin() {
               placeholder="请输入用户账号"
               :disabled="loading"
               clearable
-            />
+              class="pill-input"
+            >
+              <template #prefix>
+                <el-icon><User /></el-icon>
+              </template>
+            </el-input>
           </el-form-item>
 
           <el-form-item label="姓名">
@@ -137,7 +142,12 @@ function goLogin() {
               placeholder="请输入真实姓名"
               :disabled="loading"
               clearable
-            />
+              class="pill-input"
+            >
+              <template #prefix>
+                <el-icon><User /></el-icon>
+              </template>
+            </el-input>
           </el-form-item>
 
           <el-form-item label="密码">
@@ -147,7 +157,12 @@ function goLogin() {
               placeholder="请设置密码"
               :disabled="loading"
               show-password
-            />
+              class="pill-input"
+            >
+              <template #prefix>
+                <el-icon><Lock /></el-icon>
+              </template>
+            </el-input>
           </el-form-item>
 
           <el-form-item label="确认密码">
@@ -157,18 +172,23 @@ function goLogin() {
               placeholder="请再次输入密码"
               :disabled="loading"
               show-password
+              class="pill-input"
               @keyup.enter="handleRegister"
-            />
+            >
+              <template #prefix>
+                <el-icon><Lock /></el-icon>
+              </template>
+            </el-input>
           </el-form-item>
 
           <el-button
-            type="success"
+            type="primary"
             size="large"
-            class="w-full mt-2"
+            class="w-full h-11 pill-btn"
             :loading="loading"
             @click="handleRegister"
           >
-            注册
+            用户注册
           </el-button>
         </el-form>
       </div>
@@ -185,7 +205,12 @@ function goLogin() {
               placeholder="请输入医生工号"
               :disabled="loading"
               clearable
-            />
+              class="pill-input"
+            >
+              <template #prefix>
+                <el-icon><User /></el-icon>
+              </template>
+            </el-input>
           </el-form-item>
 
           <el-form-item label="姓名">
@@ -194,7 +219,12 @@ function goLogin() {
               placeholder="请输入真实姓名"
               :disabled="loading"
               clearable
-            />
+              class="pill-input"
+            >
+              <template #prefix>
+                <el-icon><User /></el-icon>
+              </template>
+            </el-input>
           </el-form-item>
 
           <el-form-item label="科室">
@@ -202,7 +232,7 @@ function goLogin() {
               v-model="doctorForm.department"
               placeholder="请选择所属科室"
               :disabled="loading"
-              class="w-full"
+              class="w-full pill-input"
               clearable
             >
               <el-option label="内科" value="内科" />
@@ -225,7 +255,12 @@ function goLogin() {
               placeholder="请设置密码"
               :disabled="loading"
               show-password
-            />
+              class="pill-input"
+            >
+              <template #prefix>
+                <el-icon><Lock /></el-icon>
+              </template>
+            </el-input>
           </el-form-item>
 
           <el-form-item label="确认密码">
@@ -235,18 +270,23 @@ function goLogin() {
               placeholder="请再次输入密码"
               :disabled="loading"
               show-password
+              class="pill-input"
               @keyup.enter="handleRegister"
-            />
+            >
+              <template #prefix>
+                <el-icon><Lock /></el-icon>
+              </template>
+            </el-input>
           </el-form-item>
 
           <el-button
             type="primary"
             size="large"
-            class="w-full mt-2"
+            class="w-full h-11 pill-btn"
             :loading="loading"
             @click="handleRegister"
           >
-            注册
+            医生注册
           </el-button>
         </el-form>
       </div>
@@ -261,3 +301,20 @@ function goLogin() {
     </el-card>
   </div>
 </template>
+
+<style scoped>
+.pill-input :deep(.el-input__wrapper) {
+  border-radius: 24px;
+  padding-left: 12px;
+}
+
+.pill-btn {
+  border-radius: 24px;
+  font-size: 16px;
+  letter-spacing: 4px;
+}
+
+.tab-active {
+  color: var(--el-color-primary);
+}
+</style>

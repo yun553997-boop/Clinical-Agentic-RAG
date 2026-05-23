@@ -34,6 +34,8 @@ class AppointmentResponse(BaseModel):
     appointment_time: str
     status: str
     symptoms_desc: str | None
+    paid: bool = False
+    payment_method: str | None = None
 
     model_config = {"from_attributes": True}
 
@@ -81,6 +83,8 @@ async def create_appointment(
         appointment_time=appointment.appointment_time.isoformat(),
         status=appointment.status.value,
         symptoms_desc=appointment.symptoms_desc,
+        paid=appointment.paid,
+        payment_method=appointment.payment_method,
     )
 
 
@@ -120,6 +124,8 @@ async def get_today_appointments(
             appointment_time=a.appointment_time.isoformat(),
             status=a.status.value,
             symptoms_desc=a.symptoms_desc,
+            paid=a.paid,
+            payment_method=a.payment_method,
         )
         for a in appointments
     ]
@@ -135,12 +141,14 @@ class MyAppointmentResponse(BaseModel):
     symptoms_desc: str | None
     ai_report: str | None = None
     doctor_advice: str | None = None
+    paid: bool = False
+    payment_method: str | None = None
 
     model_config = {"from_attributes": True}
 
 
-class CompleteAppointmentRequest(BaseModel):
-    """完成会诊请求体。"""
+class SubmitAppointmentRequest(BaseModel):
+    """提交会诊请求体（处方+报告）。"""
     ai_report: str = Field(..., description="AI 生成的诊疗报告（Markdown）")
     doctor_advice: str | None = Field(None, description="医生补充医嘱")
 
@@ -172,6 +180,8 @@ async def get_my_appointments(
             symptoms_desc=a.symptoms_desc,
             ai_report=a.ai_report,
             doctor_advice=a.doctor_advice,
+            paid=a.paid,
+            payment_method=a.payment_method,
         )
         for a in appointments
     ]
@@ -201,14 +211,14 @@ async def cancel_appointment(
     return {"message": "取消预约成功"}
 
 
-@router.put("/{appointment_id}/complete")
-async def complete_appointment(
+@router.put("/{appointment_id}/submit")
+async def submit_appointment(
     appointment_id: int,
-    req: CompleteAppointmentRequest,
+    req: SubmitAppointmentRequest,
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
-    """医生完成会诊，提交 AI 报告和医嘱，并将预约状态更新为已完成。"""
+    """医生完成会诊：保存 AI 报告和医嘱，标记预约为已完成。"""
     if current_user.role != UserRole.doctor:
         raise HTTPException(status_code=403, detail="仅医生可完成会诊")
 
@@ -228,4 +238,4 @@ async def complete_appointment(
     await db.commit()
     await db.refresh(appointment)
 
-    return {"message": "会诊已完成，报告已发送给患者"}
+    return {"message": "处方已提交，报告已发送给患者"}

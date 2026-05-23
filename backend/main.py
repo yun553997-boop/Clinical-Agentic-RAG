@@ -10,21 +10,24 @@ from api.endpoints.auth import router as auth_router
 from api.endpoints.appointment import router as appointment_router
 from api.endpoints.users import router as users_router
 from api.endpoints.knowledge import router as knowledge_router
-from core.database import async_engine
+from api.endpoints.payment import router as payment_router
+from api.endpoints.prescription import router as prescription_router
+from core.database import async_engine, run_migrations
 from models import Base
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    """应用生命周期：启动时自动建表并检查数据库连接。"""
+    """应用生命周期：启动时执行迁移并自动建表。"""
     import logging
     logging.basicConfig(level=logging.INFO)
     logger = logging.getLogger("main")
 
-    # 自动创建所有未存在的表（包括后续新增的模型）
+    # 先执行幂等迁移（已有表添加缺失列），再创建新表
     async with async_engine.begin() as conn:
+        await conn.run_sync(run_migrations)
         await conn.run_sync(Base.metadata.create_all)
-    logger.info("数据库表结构已同步 (create_all)")
+    logger.info("数据库表结构已同步 (migrations + create_all)")
 
     logger.info("Agentic RAG Medical Assistant 启动中...")
     yield
@@ -53,6 +56,8 @@ app.include_router(auth_router, prefix="/api/auth", tags=["认证与授权"])
 app.include_router(appointment_router, prefix="/api/appointments", tags=["预约挂号"])
 app.include_router(users_router, prefix="/api/users", tags=["用户查询"])
 app.include_router(knowledge_router, prefix="/api/knowledge", tags=["知识库管理"])
+app.include_router(payment_router, prefix="/api/payments", tags=["支付管理"])
+app.include_router(prescription_router, prefix="/api/prescriptions", tags=["处方管理"])
 
 
 @app.get("/", tags=["健康检查"])

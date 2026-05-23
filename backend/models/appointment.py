@@ -1,5 +1,5 @@
 from datetime import datetime
-from sqlalchemy import BigInteger, ForeignKey, String, Text, DateTime, Enum, func
+from sqlalchemy import BigInteger, Boolean, ForeignKey, String, Text, DateTime, Enum, func
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from models import Base
@@ -34,12 +34,18 @@ class Appointment(Base):
     symptoms_desc: Mapped[str] = mapped_column(Text, nullable=True)
     ai_report: Mapped[str | None] = mapped_column(Text, nullable=True)
     doctor_advice: Mapped[str | None] = mapped_column(Text, nullable=True)
+    paid: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    payment_method: Mapped[str | None] = mapped_column(String(16), nullable=True)
 
     patient: Mapped["User"] = relationship(
         back_populates="appointments_as_patient", foreign_keys=[patient_id]
     )
     doctor: Mapped["User"] = relationship(
         back_populates="appointments_as_doctor", foreign_keys=[doctor_id]
+    )
+    prescription: Mapped["Prescription | None"] = relationship(
+        back_populates="appointment", lazy="selectin", uselist=False,
+        cascade="all, delete-orphan"
     )
 
     def __repr__(self) -> str:

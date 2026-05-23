@@ -14,12 +14,12 @@ export const useUserStore = defineStore('user', () => {
   const isDoctor = computed(() => role.value === 'doctor')
   const isPatient = computed(() => role.value === 'patient')
 
-  async function login(account: string, password: string): Promise<void> {
+  async function login(account: string, password: string, rememberMe: boolean = false): Promise<void> {
     const formData = new URLSearchParams()
     formData.append('username', account)
     formData.append('password', password)
 
-    const response = await request.post('/api/auth/login', formData, {
+    const response = await request.post(`/api/auth/login?remember_me=${rememberMe}`, formData, {
       headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
     })
 
@@ -34,6 +34,12 @@ export const useUserStore = defineStore('user', () => {
     localStorage.setItem('role', user.role)
     localStorage.setItem('fullName', user.full_name)
     localStorage.setItem('username', user.username)
+
+    if (rememberMe) {
+      localStorage.setItem('rememberedUsername', account)
+    } else {
+      localStorage.removeItem('rememberedUsername')
+    }
   }
 
   function logout() {
@@ -45,6 +51,7 @@ export const useUserStore = defineStore('user', () => {
     localStorage.removeItem('role')
     localStorage.removeItem('fullName')
     localStorage.removeItem('username')
+    // 保留 rememberedUsername 以便下次登录预填
   }
 
   return { token, role, fullName, username, isLoggedIn, isDoctor, isPatient, login, logout }

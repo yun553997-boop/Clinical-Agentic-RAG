@@ -4,6 +4,8 @@ import { useRoute, useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import MarkdownIt from 'markdown-it'
 import request from '@/utils/request'
+import PrescriptionForm from '@/components/PrescriptionForm.vue'
+import type { PrescriptionData, MedicationItem } from '@/components/PrescriptionForm.vue'
 
 const route = useRoute()
 const router = useRouter()
@@ -43,10 +45,19 @@ const submitting = ref(false)
 const toolLogs = ref<{ text: string; kind: string }[]>([])
 const finalReport = ref('')
 const renderedReport = ref('')
-const doctorAdvice = ref('')
 const activeCollapse = ref<string[]>([])
 const terminalRef = ref<HTMLElement | null>(null)
 const reportRef = ref<HTMLElement | null>(null)
+
+// ── 处方数据 ──
+const prescription = ref<PrescriptionData>({
+  diagnosis: '',
+  medications: [
+    { drug_name: '', specification: '', dosage: '', usage_method: '口服', frequency: '每日1次', days: 7 },
+  ],
+  notes: '',
+})
+const prescriptionFilled = ref(false)
 
 // ── 终端自动滚动 ──
 watch(
@@ -104,8 +115,8 @@ async function startConsultation() {
   toolLogs.value = []
   finalReport.value = ''
   renderedReport.value = ''
+  prescriptionFilled.value = false
 
-  // 显示第一条日志
   toolLogs.value.push({
     text: '🚀 正在连接 AI 临床诊疗服务...\n',
     kind: 'system',
@@ -158,24 +169,108 @@ async function startConsultation() {
   }
 }
 
-// ── 完成会诊并发送报告 ──
-async function completeConsultation() {
-  if (!appointmentId.value) {
-    ElMessage.error('未获取到挂号单 ID，无法完成会诊')
+// ── 从 AI 报告解析处方数据 ──
+function parsePrescriptionFromReport(): PrescriptionData | null {
+  const text = finalReport.value
+  if (!text) return null
+
+  // 尝试匹配 JSON 代码块
+  const jsonBlockRegex = /```json\s*([\s\S]*?)```/g
+  let match: RegExpExecArray | null
+
+  while ((match = jsonBlockRegex.exec(text)) !== null) {
+    try {
+      const parsed = JSON.parse(match[1])
+      if (parsed.medications && Array.isArray(parsed.medications)) {
+        // 确保每个药品都有完整字段
+        const medications: MedicationItem[] = parsed.medications.map((m: Record<string, unknown>) => ({
+          drug_name: String(m.drug_name || ''),
+          specification: String(m.specification || ''),
+          dosage: String(m.dosage || ''),
+          usage_method: String(m.usage_method || '口服'),
+          frequency: String(m.frequency || '每日1次'),
+          days: Number(m.days) || 7,
+        }))
+        return {
+          diagnosis: String(parsed.diagnosis || ''),
+          medications,
+          notes: String(parsed.notes || ''),
+        }
+      }
+    } catch {
+      continue
+    }
+  }
+
+  // 尝试直接匹配包含 "prescriptions" 或 "medications" 的 JSON 对象
+  const jsonObjRegex = /\{[\s\S]*"medications"[\s\S]*\}/g
+  while ((match = jsonObjRegex.exec(text)) !== null) {
+    try {
+      const parsed = JSON.parse(match[0])
+      if (parsed.medications && Array.isArray(parsed.medications)) {
+        const medications: MedicationItem[] = parsed.medications.map((m: Record<string, unknown>) => ({
+          drug_name: String(m.drug_name || ''),
+          specification: String(m.specification || ''),
+          dosage: String(m.dosage || ''),
+          usage_method: String(m.usage_method || '口服'),
+          frequency: String(m.frequency || '每日1次'),
+          days: Number(m.days) || 7,
+        }))
+        return {
+          diagnosis: String(parsed.diagnosis || ''),
+          medications,
+          notes: String(parsed.notes || ''),
+        }
+      }
+    } catch {
+      continue
+    }
+  }
+
+  return null
+}
+
+// ── 一键填入处方 ──
+function autoFillPrescription() {
+  const data = parsePrescriptionFromReport()
+  if (data && data.medications.length > 0) {
+    prescription.value = data
+    prescriptionFilled.value = true
+    ElMessage.success(`已从 AI 报告提取 ${data.medications.length} 条用药建议`)
+  } else {
+    ElMessage.warning('AI 报告中未找到结构化用药数据，请手动填写处方')
+  }
+}
+
+// ── 提交处方并完成会诊 ──
+async function submitPrescription() {
+  // 验证处方
+  const validMeds = prescription.value.medications.filter((m) => m.drug_name.trim())
+  if (validMeds.length === 0) {
+    ElMessage.warning('请至少填写一种药品')
     return
   }
-  if (!finalReport.value.trim()) {
-    ElMessage.warning('请先生成 AI 诊疗报告')
+  if (!appointmentId.value) {
+    ElMessage.error('未关联挂号单 ID，无法提交')
     return
   }
 
   submitting.value = true
   try {
-    await request.put(`/api/appointments/${appointmentId.value}/complete`, {
-      ai_report: finalReport.value,
-      doctor_advice: doctorAdvice.value || null,
+    // 1. 保存处方
+    await request.post(`/api/prescriptions/${appointmentId.value}`, {
+      diagnosis: prescription.value.diagnosis,
+      medications: validMeds,
+      notes: prescription.value.notes || null,
     })
-    ElMessage.success('会诊已完成，报告已发送给患者')
+
+    // 2. 提交 AI 报告并标记完成
+    await request.put(`/api/appointments/${appointmentId.value}/submit`, {
+      ai_report: finalReport.value,
+      doctor_advice: null,
+    })
+
+    ElMessage.success('处方已提交，报告已发送给患者')
     router.push('/doctor/dashboard')
   } catch {
     ElMessage.error('提交失败，请重试')
@@ -190,7 +285,12 @@ function resetForm() {
   toolLogs.value = []
   finalReport.value = ''
   renderedReport.value = ''
-  doctorAdvice.value = ''
+  prescription.value = {
+    diagnosis: '',
+    medications: [{ drug_name: '', specification: '', dosage: '', usage_method: '口服', frequency: '每日1次', days: 7 }],
+    notes: '',
+  }
+  prescriptionFilled.value = false
 }
 </script>
 
@@ -269,7 +369,7 @@ function resetForm() {
               type="textarea"
               :rows="5"
               placeholder="请详细描述患者当前主诉、症状、体征、检查结果等……
-示例：患者近一周出现头晕、视物模糊，自测血压 165/95 mmHg，空腹血糖 8.2 mmol/L……"
+        示例：患者近一周出现头晕、视物模糊，自测血压 165/95 mmHg，空腹血糖 8.2 mmol/L……"
               :disabled="loading"
             />
           </el-form-item>
@@ -307,7 +407,7 @@ function resetForm() {
     </aside>
 
     <!-- ══════════════════════════ 右侧：AI 思考与输出区 ══════════════════════════ -->
-    <main class="flex-1 flex flex-col p-5 pl-0 gap-4 min-w-0">
+    <main class="flex-1 flex flex-col p-5 pl-0 gap-4 min-w-0 overflow-y-auto">
       <!-- 上半部分：Agent 执行日志（折叠面板） -->
       <el-collapse v-model="activeCollapse">
         <el-collapse-item title="⚙️ 查看 AI 思考与工具调用过程" name="logs">
@@ -356,11 +456,7 @@ function resetForm() {
       <!-- 下半部分：最终报告 -->
       <el-card
         shadow="hover"
-        class="flex-1 flex flex-col min-h-0"
         :body-style="{
-          flex: 1,
-          display: 'flex',
-          flexDirection: 'column',
           padding: 0,
           overflow: 'hidden',
         }"
@@ -393,12 +489,12 @@ function resetForm() {
         <!-- 报告内容区 -->
         <div
           ref="reportRef"
-          class="flex-1 overflow-y-auto p-6 bg-white"
+          class="overflow-y-auto p-6 bg-white"
         >
           <!-- 空状态 -->
           <div
             v-if="!finalReport && !loading"
-            class="text-slate-400 flex items-center justify-center h-full"
+            class="text-slate-400 flex items-center justify-center h-full py-12"
           >
             <div class="text-center">
               <div class="text-3xl mb-3">📄</div>
@@ -428,49 +524,62 @@ function resetForm() {
         </div>
       </el-card>
 
-      <!-- 医生复核与发报告区域 -->
+      <!-- 处方筏表单（AI 报告生成后显示） -->
       <el-card
         v-if="finalReport"
         shadow="hover"
       >
         <template #header>
-          <div class="flex items-center gap-2 text-medical-800 font-semibold">
-            <span class="text-lg">👨‍⚕️</span>
-            <span>医生复核与发送报告</span>
-          </div>
-        </template>
-
-        <el-form label-position="top">
-          <el-form-item label="医生补充医嘱 (可选)">
-            <el-input
-              v-model="doctorAdvice"
-              type="textarea"
-              :rows="4"
-              placeholder="请输入补充医嘱、用药建议、复诊安排等……"
-              :disabled="submitting"
-            />
-          </el-form-item>
-
-          <div class="flex items-center justify-between">
-            <div
-              v-if="!appointmentId"
-              class="text-amber-600 text-sm flex items-center gap-2"
-            >
-              <span>⚠️</span>
-              <span>未关联挂号单 ID，请从候诊列表进入</span>
+          <div class="flex items-center justify-between text-medical-800 font-semibold">
+            <div class="flex items-center gap-2">
+              <span class="text-lg">📝</span>
+              <span>传统处方筏</span>
+              <el-tag v-if="prescriptionFilled" type="success" size="small" effect="dark" round>
+                已填入
+              </el-tag>
             </div>
             <el-button
               type="primary"
-              size="large"
-              :loading="submitting"
-              :disabled="!appointmentId || !finalReport"
-              @click="completeConsultation"
+              size="small"
+              :disabled="loading"
+              @click="autoFillPrescription"
             >
-              {{ submitting ? '提交中…' : '🏁 结束会诊并发送报告给患者' }}
+              🤖 从 AI 报告一键填入处方
             </el-button>
           </div>
-        </el-form>
+        </template>
+
+        <PrescriptionForm
+          v-model="prescription"
+          :disabled="submitting"
+        />
       </el-card>
+
+      <!-- 提交按钮 -->
+      <div
+        v-if="finalReport"
+        class="flex items-center justify-between bg-white rounded-lg p-4 shadow"
+      >
+        <div
+          v-if="!appointmentId"
+          class="text-amber-600 text-sm flex items-center gap-2"
+        >
+          <span>⚠️</span>
+          <span>未关联挂号单 ID，请从候诊列表进入</span>
+        </div>
+        <div v-else class="text-sm text-slate-500">
+          确认处方信息无误后提交给患者
+        </div>
+        <el-button
+          type="primary"
+          size="large"
+          :loading="submitting"
+          :disabled="!appointmentId || !finalReport"
+          @click="submitPrescription"
+        >
+          {{ submitting ? '提交中…' : '📋 提交处方给患者' }}
+        </el-button>
+      </div>
     </main>
   </div>
 </template>

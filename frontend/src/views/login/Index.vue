@@ -1,8 +1,9 @@
 <script setup lang="ts">
-import { ref, reactive, computed } from 'vue'
+import { ref, reactive, computed, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import { useUserStore } from '@/stores/user'
+import request from '@/utils/request'
 
 const router = useRouter()
 const userStore = useUserStore()
@@ -15,6 +16,15 @@ const rememberMe = ref(false)
 
 const currentForm = computed(() => (activeTab.value === 'doctor' ? doctorForm : patientForm))
 
+onMounted(() => {
+  const remembered = localStorage.getItem('rememberedUsername')
+  if (remembered) {
+    patientForm.account = remembered
+    doctorForm.account = remembered
+    rememberMe.value = true
+  }
+})
+
 async function handleLogin() {
   const form = currentForm.value
   if (!form.account.trim() || !form.password.trim()) {
@@ -24,7 +34,7 @@ async function handleLogin() {
 
   loading.value = true
   try {
-    await userStore.login(form.account, form.password)
+    await userStore.login(form.account.trim(), form.password, rememberMe.value)
     if (userStore.isDoctor) {
       router.push('/doctor/workspace')
     } else if (userStore.isPatient) {
@@ -45,6 +55,91 @@ function handleTabChange() {
 
 function goRegister(role: 'doctor' | 'patient') {
   router.push({ path: '/register', query: { role } })
+}
+
+// ── 忘记密码流程 ──
+const forgotVisible = ref(false)
+const forgotStep = ref(1)
+const forgotUsername = ref('')
+const forgotQuestion = ref('')
+const forgotAnswer = ref('')
+const forgotResetToken = ref('')
+const forgotNewPassword = ref('')
+const forgotConfirmPassword = ref('')
+const forgotLoading = ref(false)
+
+function openForgotPassword() {
+  forgotStep.value = 1
+  forgotUsername.value = ''
+  forgotQuestion.value = ''
+  forgotAnswer.value = ''
+  forgotResetToken.value = ''
+  forgotNewPassword.value = ''
+  forgotConfirmPassword.value = ''
+  forgotVisible.value = true
+}
+
+async function handleForgotStep1() {
+  if (!forgotUsername.value.trim()) {
+    ElMessage.warning('请输入用户名')
+    return
+  }
+  forgotLoading.value = true
+  try {
+    const res = await request.post('/api/auth/forgot-password/question', {
+      username: forgotUsername.value.trim(),
+    })
+    forgotQuestion.value = res.data.security_question
+    forgotStep.value = 2
+  } catch {
+    // 错误已在拦截器处理
+  } finally {
+    forgotLoading.value = false
+  }
+}
+
+async function handleForgotStep2() {
+  if (!forgotAnswer.value.trim()) {
+    ElMessage.warning('请输入密保答案')
+    return
+  }
+  forgotLoading.value = true
+  try {
+    const res = await request.post('/api/auth/forgot-password/verify', {
+      username: forgotUsername.value.trim(),
+      answer: forgotAnswer.value.trim(),
+    })
+    forgotResetToken.value = res.data.reset_token
+    forgotStep.value = 3
+  } catch {
+    // 错误已在拦截器处理
+  } finally {
+    forgotLoading.value = false
+  }
+}
+
+async function handleForgotStep3() {
+  if (!forgotNewPassword.value.trim()) {
+    ElMessage.warning('请输入新密码')
+    return
+  }
+  if (forgotNewPassword.value !== forgotConfirmPassword.value) {
+    ElMessage.warning('两次密码输入不一致')
+    return
+  }
+  forgotLoading.value = true
+  try {
+    await request.post('/api/auth/forgot-password/reset', {
+      reset_token: forgotResetToken.value,
+      new_password: forgotNewPassword.value,
+    })
+    ElMessage.success('密码重置成功，请登录')
+    forgotVisible.value = false
+  } catch {
+    // 错误已在拦截器处理
+  } finally {
+    forgotLoading.value = false
+  }
 }
 </script>
 
@@ -125,7 +220,7 @@ function goRegister(role: 'doctor' | 'patient') {
             <el-checkbox v-model="rememberMe" :disabled="loading" size="small">
               下次自动登录
             </el-checkbox>
-            <el-button type="primary" link size="small">
+            <el-button type="primary" link size="small" @click="openForgotPassword">
               忘记密码？
             </el-button>
           </div>
@@ -188,7 +283,7 @@ function goRegister(role: 'doctor' | 'patient') {
             <el-checkbox v-model="rememberMe" :disabled="loading" size="small">
               下次自动登录
             </el-checkbox>
-            <el-button type="primary" link size="small">
+            <el-button type="primary" link size="small" @click="openForgotPassword">
               忘记密码？
             </el-button>
           </div>
@@ -211,6 +306,97 @@ function goRegister(role: 'doctor' | 'patient') {
         </el-form>
       </div>
     </el-card>
+
+    <!-- 忘记密码对话框 -->
+    <el-dialog
+      v-model="forgotVisible"
+      title="找回密码"
+      width="400px"
+      :close-on-click-modal="false"
+      :show-close="!forgotLoading"
+      @close="forgotStep = 1"
+    >
+      <!-- 步骤1：输入用户名 -->
+      <div v-if="forgotStep === 1">
+        <p class="text-sm text-slate-600 mb-4">请输入您的账号，我们将通过密保问题验证您的身份。</p>
+        <el-form label-position="top" @submit.prevent="handleForgotStep1">
+          <el-form-item label="账号">
+            <el-input
+              v-model="forgotUsername"
+              placeholder="请输入账号"
+              :disabled="forgotLoading"
+            />
+          </el-form-item>
+          <el-button
+            type="primary"
+            class="w-full"
+            :loading="forgotLoading"
+            @click="handleForgotStep1"
+          >
+            下一步
+          </el-button>
+        </el-form>
+      </div>
+
+      <!-- 步骤2：回答密保问题 -->
+      <div v-if="forgotStep === 2">
+        <div class="bg-blue-50 rounded-lg p-3 mb-4">
+          <span class="text-sm font-semibold text-blue-800">密保问题：</span>
+          <span class="text-sm text-blue-700">{{ forgotQuestion }}</span>
+        </div>
+        <el-form label-position="top" @submit.prevent="handleForgotStep2">
+          <el-form-item label="密保答案">
+            <el-input
+              v-model="forgotAnswer"
+              placeholder="请输入密保答案"
+              :disabled="forgotLoading"
+            />
+          </el-form-item>
+          <el-button
+            type="primary"
+            class="w-full"
+            :loading="forgotLoading"
+            @click="handleForgotStep2"
+          >
+            验证答案
+          </el-button>
+        </el-form>
+      </div>
+
+      <!-- 步骤3：重置密码 -->
+      <div v-if="forgotStep === 3">
+        <p class="text-sm text-green-600 mb-4">身份验证通过，请设置新密码。</p>
+        <el-form label-position="top" @submit.prevent="handleForgotStep3">
+          <el-form-item label="新密码">
+            <el-input
+              v-model="forgotNewPassword"
+              type="password"
+              placeholder="请输入新密码"
+              :disabled="forgotLoading"
+              show-password
+            />
+          </el-form-item>
+          <el-form-item label="确认密码">
+            <el-input
+              v-model="forgotConfirmPassword"
+              type="password"
+              placeholder="请再次输入新密码"
+              :disabled="forgotLoading"
+              show-password
+              @keyup.enter="handleForgotStep3"
+            />
+          </el-form-item>
+          <el-button
+            type="primary"
+            class="w-full"
+            :loading="forgotLoading"
+            @click="handleForgotStep3"
+          >
+            重置密码
+          </el-button>
+        </el-form>
+      </div>
+    </el-dialog>
   </div>
 </template>
 

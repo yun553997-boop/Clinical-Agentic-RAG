@@ -23,6 +23,8 @@ class User(Base):
     full_name: Mapped[str] = mapped_column(String(64), nullable=False)
     employee_id: Mapped[str | None] = mapped_column(String(64), nullable=True)
     department: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    security_question: Mapped[str | None] = mapped_column(String(256), nullable=True)
+    security_answer_hashed: Mapped[str | None] = mapped_column(String(256), nullable=True)
 
     appointments_as_patient: Mapped[list["Appointment"]] = relationship(
         back_populates="patient", lazy="selectin", foreign_keys="Appointment.patient_id"

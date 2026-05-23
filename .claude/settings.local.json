@@ -31,7 +31,13 @@
       "PowerShell(python -c \"import pypdf; print\\(pypdf.__file__\\)\")",
       "PowerShell($env:PYTHONPATH = \"D:\\\\Wed-dev\\\\xiangmulianxi\\\\Clinical Agentic RAG\\\\backend\"; python -c \"from main import app; from api.endpoints.knowledge import router; from models.knowledge import KnowledgeDoc; print\\('All OK'\\)\")",
       "PowerShell(Invoke-WebRequest -Uri http://localhost:8000/ -UseBasicParsing -TimeoutSec 5 | Select-Object -ExpandProperty Content)",
-      "PowerShell(curl.exe -s -X POST http://localhost:8000/api/auth/login -d \"username=admin&password=123\" 2>&1)"
+      "PowerShell(curl.exe -s -X POST http://localhost:8000/api/auth/login -d \"username=admin&password=123\" 2>&1)",
+      "PowerShell(Get-ChildItem -Path \"D:\\\\Wed-dev\\\\xiangmulianxi\\\\Clinical Agentic RAG\" -Depth 0 | ForEach-Object { $_.Name })",
+      "PowerShell(Get-ChildItem -Path \"D:\\\\Wed-dev\\\\xiangmulianxi\\\\Clinical Agentic RAG\\\\frontend\" -Depth 0 | ForEach-Object { $_.Name })",
+      "PowerShell(Get-ChildItem -Path \"D:\\\\Wed-dev\\\\xiangmulianxi\\\\Clinical Agentic RAG\\\\backend\" -Depth 0 -Exclude \"venv\" | ForEach-Object { $_.Name })",
+      "PowerShell(Get-ChildItem -Path \"D:\\\\Wed-dev\\\\xiangmulianxi\\\\Clinical Agentic RAG\\\\frontend\\\\src\" -Recurse -Directory | ForEach-Object { $_.FullName.Replace\\(\"D:\\\\Wed-dev\\\\xiangmulianxi\\\\Clinical Agentic RAG\\\\frontend\\\\\", \"\"\\) })",
+      "PowerShell(Get-ChildItem -Path \"D:\\\\Wed-dev\\\\xiangmulianxi\\\\Clinical Agentic RAG\\\\frontend\\\\src\" -Recurse -File | ForEach-Object { $_.FullName.Replace\\(\"D:\\\\Wed-dev\\\\xiangmulianxi\\\\Clinical Agentic RAG\\\\frontend\\\\\", \"\"\\) })",
+      "PowerShell(Get-NetTCPConnection *)"
     ]
   }
 }

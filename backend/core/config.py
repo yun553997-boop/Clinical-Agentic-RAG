@@ -29,6 +29,8 @@ class Settings(BaseSettings):
     ALGORITHM: str = "HS256"
     # Token 过期时间（分钟）
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 60 * 24
+    # 记住密码时的 Token 过期时间（30 天）
+    ACCESS_TOKEN_EXPIRE_MINUTES_REMEMBER: int = 60 * 24 * 30
 
     # 应用运行端口
     APP_PORT: int = 8000

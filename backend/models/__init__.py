@@ -9,6 +9,7 @@ class Base(DeclarativeBase):
 from models.patient import Patient, MedicalRecord
 from models.user import User
 from models.appointment import Appointment
+from models.prescription import Prescription
 from models.knowledge import KnowledgeDoc
 
-__all__ = ["Base", "Patient", "MedicalRecord", "User", "Appointment", "KnowledgeDoc"]
+__all__ = ["Base", "Patient", "MedicalRecord", "User", "Appointment", "Prescription", "KnowledgeDoc"]

@@ -16,12 +16,16 @@ const doctorForm = reactive({
   department: '',
   password: '',
   confirmPassword: '',
+  security_question: '',
+  security_answer: '',
 })
 const patientForm = reactive({
   account: '',
   name: '',
   password: '',
   confirmPassword: '',
+  security_question: '',
+  security_answer: '',
 })
 const loading = ref(false)
 
@@ -62,6 +66,12 @@ async function handleRegister() {
     if (activeTab.value === 'doctor') {
       payload.employee_id = form.account.trim()
       payload.department = doctorForm.department
+    }
+
+    // 密保字段（选填）
+    if (form.security_question && form.security_answer) {
+      payload.security_question = form.security_question
+      payload.security_answer = form.security_answer
     }
 
     await request.post('/api/auth/register', payload)
@@ -181,6 +191,35 @@ function goLogin() {
             </el-input>
           </el-form-item>
 
+          <!-- 安全设置（可选） -->
+          <div class="bg-slate-50 rounded-lg p-3 mb-4">
+            <p class="text-xs text-slate-500 mb-2">安全设置（可选，用于找回密码）</p>
+            <el-form-item label="密保问题" class="mb-2">
+              <el-select
+                v-model="patientForm.security_question"
+                placeholder="请选择密保问题"
+                :disabled="loading"
+                class="w-full"
+                clearable
+                filterable
+                allow-create
+              >
+                <el-option label="您的出生城市是？" value="您的出生城市是？" />
+                <el-option label="您的小学名称是？" value="您的小学名称是？" />
+                <el-option label="您的母亲姓名是？" value="您的母亲姓名是？" />
+                <el-option label="您最喜欢的颜色是？" value="您最喜欢的颜色是？" />
+                <el-option label="您的宠物名字是？" value="您的宠物名字是？" />
+              </el-select>
+            </el-form-item>
+            <el-form-item label="密保答案" class="mb-0">
+              <el-input
+                v-model="patientForm.security_answer"
+                placeholder="请输入密保答案"
+                :disabled="loading"
+              />
+            </el-form-item>
+          </div>
+
           <el-button
             type="primary"
             size="large"
@@ -278,6 +317,35 @@ function goLogin() {
               </template>
             </el-input>
           </el-form-item>
+
+          <!-- 安全设置（可选） -->
+          <div class="bg-slate-50 rounded-lg p-3 mb-4">
+            <p class="text-xs text-slate-500 mb-2">安全设置（可选，用于找回密码）</p>
+            <el-form-item label="密保问题" class="mb-2">
+              <el-select
+                v-model="doctorForm.security_question"
+                placeholder="请选择密保问题"
+                :disabled="loading"
+                class="w-full"
+                clearable
+                filterable
+                allow-create
+              >
+                <el-option label="您的出生城市是？" value="您的出生城市是？" />
+                <el-option label="您的小学名称是？" value="您的小学名称是？" />
+                <el-option label="您的母亲姓名是？" value="您的母亲姓名是？" />
+                <el-option label="您最喜欢的颜色是？" value="您最喜欢的颜色是？" />
+                <el-option label="您的宠物名字是？" value="您的宠物名字是？" />
+              </el-select>
+            </el-form-item>
+            <el-form-item label="密保答案" class="mb-0">
+              <el-input
+                v-model="doctorForm.security_answer"
+                placeholder="请输入密保答案"
+                :disabled="loading"
+              />
+            </el-form-item>
+          </div>
 
           <el-button
             type="primary"

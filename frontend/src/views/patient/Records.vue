@@ -1,13 +1,7 @@
 <script setup lang="ts">
 import { ref, onMounted } from 'vue'
 import { ElMessage } from 'element-plus'
-import MarkdownIt from 'markdown-it'
 import request from '@/utils/request'
-
-const md = new MarkdownIt({
-  breaks: true,
-  linkify: true,
-})
 
 interface Record {
   id: number
@@ -40,12 +34,8 @@ interface PrescriptionData {
 
 const records = ref<Record[]>([])
 const loading = ref(false)
-const reportVisible = ref(false)
-const currentReport = ref<{
-  ai_report: string
-  doctor_advice: string | null
-  prescription: PrescriptionData | null
-} | null>(null)
+const prescriptionVisible = ref(false)
+const currentPrescription = ref<PrescriptionData | null>(null)
 const loadingPrescription = ref(false)
 
 function formatTime(dateStr: string) {
@@ -93,28 +83,17 @@ async function cancelAppointment(id: number) {
   }
 }
 
-async function viewReport(row: Record) {
+async function viewPrescription(row: Record) {
   loadingPrescription.value = true
-  let prescription: PrescriptionData | null = null
+  currentPrescription.value = null
   try {
     const res = await request.get(`/api/prescriptions/by-appointment/${row.id}`)
-    prescription = res.data
+    currentPrescription.value = res.data
   } catch {
-    // 如果没有处方也可以正常查看报告
+    ElMessage.warning('暂无处方信息')
   }
   loadingPrescription.value = false
-
-  currentReport.value = {
-    ai_report: row.ai_report || '',
-    doctor_advice: row.doctor_advice,
-    prescription,
-  }
-  reportVisible.value = true
-}
-
-function renderMarkdown(text: string | null): string {
-  if (!text) return ''
-  return md.render(text)
+  prescriptionVisible.value = true
 }
 
 onMounted(() => {
@@ -182,9 +161,9 @@ onMounted(() => {
               v-if="row.status === '已完成'"
               type="primary"
               size="small"
-              @click="viewReport(row)"
+              @click="viewPrescription(row)"
             >
-              查看诊疗报告
+              查看处方筏
             </el-button>
           </template>
         </el-table-column>
@@ -193,83 +172,59 @@ onMounted(() => {
       <el-empty v-else v-loading="loading" description="暂无预约记录" />
     </el-card>
 
-    <!-- 诊疗报告对话框 -->
+    <!-- 处方筏对话框 -->
     <el-dialog
-      v-model="reportVisible"
-      title="📄 诊疗报告与处方"
-      width="720px"
+      v-model="prescriptionVisible"
+      title="📝 电子处方筏"
+      width="700px"
       top="5vh"
       :close-on-click-modal="false"
     >
-      <div v-if="currentReport" class="space-y-6">
-        <!-- AI 报告 -->
-        <div>
-          <h3 class="text-base font-semibold text-medical-800 mb-3">
-            🤖 AI 诊疗辅助报告
-          </h3>
-          <div
-            class="markdown-body bg-slate-50 rounded-lg p-4 border"
-            v-html="renderMarkdown(currentReport.ai_report)"
-          ></div>
-        </div>
-
-        <!-- 医生处方 -->
-        <div v-if="currentReport.prescription">
-          <h3 class="text-base font-semibold text-medical-800 mb-3">
-            📝 电子处方筏
-          </h3>
-          <div class="bg-green-50 rounded-lg p-4 border border-green-200">
-            <div v-if="currentReport.prescription.diagnosis" class="mb-3">
-              <span class="text-sm font-semibold text-slate-600">诊断：</span>
-              <span class="text-sm text-slate-800">{{ currentReport.prescription.diagnosis }}</span>
-            </div>
-
-            <el-table
-              :data="currentReport.prescription.medications"
-              size="small"
-              border
-              class="mb-3"
-            >
-              <el-table-column prop="drug_name" label="药品名称" min-width="120" />
-              <el-table-column prop="specification" label="规格" min-width="90" />
-              <el-table-column prop="dosage" label="用量" min-width="70" />
-              <el-table-column prop="usage_method" label="用法" min-width="80" />
-              <el-table-column prop="frequency" label="频次" min-width="90" />
-              <el-table-column prop="days" label="天数" min-width="60">
-                <template #default="{ row }">
-                  {{ row.days }}天
-                </template>
-              </el-table-column>
-            </el-table>
-
-            <div v-if="currentReport.prescription.notes">
-              <span class="text-sm font-semibold text-slate-600">医嘱：</span>
-              <span class="text-sm text-slate-800">{{ currentReport.prescription.notes }}</span>
-            </div>
+      <div v-if="currentPrescription" class="space-y-6">
+        <div class="bg-green-50 rounded-lg p-4 border border-green-200">
+          <div v-if="currentPrescription.diagnosis" class="mb-3">
+            <span class="text-sm font-semibold text-slate-600">诊断：</span>
+            <span class="text-sm text-slate-800">{{ currentPrescription.diagnosis }}</span>
           </div>
-        </div>
 
-        <!-- 医生医嘱（旧版兼容） -->
-        <div v-if="currentReport.doctor_advice && !currentReport.prescription">
-          <h3 class="text-base font-semibold text-medical-800 mb-3">
-            👨‍⚕️ 医生补充医嘱
-          </h3>
-          <div
-            class="markdown-body bg-blue-50 rounded-lg p-4 border border-blue-200"
-            v-html="renderMarkdown(currentReport.doctor_advice)"
-          ></div>
-        </div>
+          <el-table
+            :data="currentPrescription.medications"
+            size="small"
+            border
+            class="mb-3"
+          >
+            <el-table-column prop="drug_name" label="药品名称" min-width="120" />
+            <el-table-column prop="specification" label="规格" min-width="90" />
+            <el-table-column prop="dosage" label="用量" min-width="70" />
+            <el-table-column prop="usage_method" label="用法" min-width="80" />
+            <el-table-column prop="frequency" label="频次" min-width="90" />
+            <el-table-column prop="days" label="天数" min-width="60">
+              <template #default="{ row }">
+                {{ row.days }}天
+              </template>
+            </el-table-column>
+          </el-table>
 
-        <div
-          v-if="!currentReport.prescription && loadingPrescription"
-          class="text-center text-slate-400 text-sm"
-        >
-          加载处方中...
+          <div v-if="currentPrescription.notes">
+            <span class="text-sm font-semibold text-slate-600">医嘱：</span>
+            <span class="text-sm text-slate-800">{{ currentPrescription.notes }}</span>
+          </div>
         </div>
       </div>
 
+      <div
+        v-else-if="loadingPrescription"
+        class="text-center text-slate-400 text-sm py-4"
+      >
+        加载处方中...
+      </div>
+
+      <div v-else class="text-center text-slate-400 text-sm py-4">
+        暂无处方信息
+      </div>
+
       <template #footer>
-        <el-button @click="reportVisible = false">关闭</el-button>
+        <el-button @click="prescriptionVisible = false">关闭</el-button>
       </template>
     </el-dialog>
   </div>

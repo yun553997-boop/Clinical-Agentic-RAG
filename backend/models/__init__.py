@@ -11,5 +11,6 @@ from models.user import User
 from models.appointment import Appointment
 from models.prescription import Prescription
 from models.knowledge import KnowledgeDoc
+from models.schedule import DoctorSchedule
 
-__all__ = ["Base", "Patient", "MedicalRecord", "User", "Appointment", "Prescription", "KnowledgeDoc"]
+__all__ = ["Base", "Patient", "MedicalRecord", "User", "Appointment", "Prescription", "KnowledgeDoc", "DoctorSchedule"]

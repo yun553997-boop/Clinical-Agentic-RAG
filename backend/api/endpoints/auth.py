@@ -31,9 +31,11 @@ class RegisterRequest(BaseModel):
 
 class UserResponse(BaseModel):
     """登录响应中的用户信息。"""
+    id: int
     username: str
     role: str
     full_name: str
+    avatar_url: str | None = None
 
     model_config = {"from_attributes": True}
 
@@ -91,9 +93,11 @@ async def login(
     return LoginResponse(
         access_token=access_token,
         user=UserResponse(
+            id=user.id,
             username=user.username,
             role=user.role.value,
             full_name=user.full_name,
+            avatar_url=user.avatar_url,
         ),
     )
 

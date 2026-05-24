@@ -49,6 +49,12 @@ const router = createRouter({
           meta: { title: '指南知识库管理' },
         },
         {
+          path: 'schedule',
+          name: 'DoctorSchedule',
+          component: () => import('@/views/doctor/Schedule.vue'),
+          meta: { title: '出诊排班' },
+        },
+        {
           path: 'report',
           name: 'DoctorReport',
           component: () => import('@/views/doctor/AiReport.vue'),

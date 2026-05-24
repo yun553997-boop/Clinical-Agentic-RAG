@@ -32,6 +32,46 @@ def run_migrations(connection):
     connection.execute(text(
         "ALTER TABLE users ADD COLUMN IF NOT EXISTS security_answer_hashed VARCHAR(256)"
     ))
+    connection.execute(text(
+        "ALTER TABLE users ADD COLUMN IF NOT EXISTS title VARCHAR(32)"
+    ))
+    connection.execute(text(
+        "ALTER TABLE users ADD COLUMN IF NOT EXISTS specialty VARCHAR(128)"
+    ))
+    connection.execute(text(
+        "ALTER TABLE users ADD COLUMN IF NOT EXISTS bio TEXT"
+    ))
+    connection.execute(text(
+        "ALTER TABLE users ADD COLUMN IF NOT EXISTS phone VARCHAR(32)"
+    ))
+    connection.execute(text(
+        "ALTER TABLE users ADD COLUMN IF NOT EXISTS email VARCHAR(128)"
+    ))
+    connection.execute(text(
+        "ALTER TABLE users ADD COLUMN IF NOT EXISTS gender VARCHAR(8)"
+    ))
+    connection.execute(text(
+        "ALTER TABLE users ADD COLUMN IF NOT EXISTS avatar_url TEXT"
+    ))
+    # 修复：avatar_url 从 VARCHAR 改为 TEXT 以支持 Base64 头像
+    connection.execute(text(
+        "ALTER TABLE users ALTER COLUMN avatar_url TYPE TEXT"
+    ))
+    # doctor_schedules 新表
+    connection.execute(text(
+        "CREATE TABLE IF NOT EXISTS doctor_schedules ("
+        "  id BIGSERIAL PRIMARY KEY,"
+        "  doctor_id BIGINT NOT NULL REFERENCES users(id),"
+        "  slot_date DATE NOT NULL,"
+        "  slot_time TIME NOT NULL,"
+        "  is_booked BOOLEAN DEFAULT FALSE NOT NULL,"
+        "  created_at TIMESTAMP DEFAULT NOW() NOT NULL"
+        ")"
+    ))
+    connection.execute(text(
+        "CREATE INDEX IF NOT EXISTS idx_doctor_schedules_doctor_date"
+        " ON doctor_schedules(doctor_id, slot_date)"
+    ))
     # prescriptions 表：若缺少新字段则删表重建（旧表无 doctor_id/patient_id 列）
     _rebuild_prescriptions_if_stale(connection)
 

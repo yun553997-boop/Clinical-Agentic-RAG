@@ -37,7 +37,8 @@
       "PowerShell(Get-ChildItem -Path \"D:\\\\Wed-dev\\\\xiangmulianxi\\\\Clinical Agentic RAG\\\\backend\" -Depth 0 -Exclude \"venv\" | ForEach-Object { $_.Name })",
       "PowerShell(Get-ChildItem -Path \"D:\\\\Wed-dev\\\\xiangmulianxi\\\\Clinical Agentic RAG\\\\frontend\\\\src\" -Recurse -Directory | ForEach-Object { $_.FullName.Replace\\(\"D:\\\\Wed-dev\\\\xiangmulianxi\\\\Clinical Agentic RAG\\\\frontend\\\\\", \"\"\\) })",
       "PowerShell(Get-ChildItem -Path \"D:\\\\Wed-dev\\\\xiangmulianxi\\\\Clinical Agentic RAG\\\\frontend\\\\src\" -Recurse -File | ForEach-Object { $_.FullName.Replace\\(\"D:\\\\Wed-dev\\\\xiangmulianxi\\\\Clinical Agentic RAG\\\\frontend\\\\\", \"\"\\) })",
-      "PowerShell(Get-NetTCPConnection *)"
+      "PowerShell(Get-NetTCPConnection *)",
+      "PowerShell(Test-Path *)"
     ]
   }
 }

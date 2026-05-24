@@ -11,6 +11,7 @@ from sqlalchemy.orm import selectinload
 from api.dependencies import get_current_user
 from core.database import get_db
 from models.appointment import Appointment, AppointmentStatus
+from models.schedule import DoctorSchedule
 from models.user import User, UserRole
 
 router = APIRouter()
@@ -20,7 +21,7 @@ class AppointmentCreate(BaseModel):
     """预约挂号请求体。"""
     doctor_id: int = Field(..., description="目标医生 ID")
     department: str = Field(..., min_length=1, max_length=64, description="预约科室")
-    appointment_time: datetime | None = Field(None, description="预约时间（默认当前时间）")
+    slot_id: int = Field(..., description="选择的排班时段 ID")
     symptoms_desc: str | None = Field(None, description="初步症状描述")
 
 
@@ -46,7 +47,7 @@ async def create_appointment(
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
-    """患者提交预约挂号。"""
+    """患者提交预约挂号（基于医生排班时段）。"""
     if current_user.role != UserRole.patient:
         raise HTTPException(status_code=403, detail="仅患者可提交挂号申请")
 
@@ -56,11 +57,20 @@ async def create_appointment(
     if doctor is None or doctor.role != UserRole.doctor:
         raise HTTPException(status_code=400, detail="目标医生不存在")
 
-    # 将可能带时区的 datetime 转为 naive UTC（匹配数据库 DateTime 列类型）
-    appt_time = req.appointment_time
-    if appt_time is not None and appt_time.tzinfo is not None:
-        appt_time = appt_time.replace(tzinfo=None)
-    appt_time = appt_time or datetime.now(timezone.utc).replace(tzinfo=None)
+    # 校验排班时段
+    slot = await db.get(DoctorSchedule, req.slot_id)
+    if slot is None:
+        raise HTTPException(status_code=400, detail="该时段不存在")
+    if slot.doctor_id != req.doctor_id:
+        raise HTTPException(status_code=400, detail="时段与医生不匹配")
+    if slot.is_booked:
+        raise HTTPException(status_code=400, detail="该时段已被预约")
+
+    # 组合日期和时间
+    appt_time = datetime.combine(slot.slot_date, slot.slot_time)
+
+    # 标记时段为已预约
+    slot.is_booked = True
 
     appointment = Appointment(
         patient_id=current_user.id,

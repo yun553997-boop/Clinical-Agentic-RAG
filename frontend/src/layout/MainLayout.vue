@@ -1,11 +1,20 @@
 <script setup lang="ts">
-import { computed } from 'vue'
+import { computed, ref } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import { useUserStore } from '@/stores/user'
+import DoctorProfileDialog from '@/components/DoctorProfileDialog.vue'
 
 const router = useRouter()
 const route = useRoute()
 const userStore = useUserStore()
+
+const profileDialogVisible = ref(false)
+
+function openProfile() {
+  if (userStore.isDoctor) {
+    profileDialogVisible.value = true
+  }
+}
 
 // 根据角色动态生成菜单项
 const menuItems = computed(() => {
@@ -13,6 +22,7 @@ const menuItems = computed(() => {
     return [
       { path: '/doctor/dashboard', title: '今日候诊', icon: 'List' },
       { path: '/doctor/workspace', title: 'AI 辅助会诊', icon: 'Cpu' },
+      { path: '/doctor/schedule', title: '出诊排班', icon: 'Clock' },
       { path: '/doctor/knowledge', title: '指南知识库管理', icon: 'Collection' },
     ]
   }
@@ -55,12 +65,29 @@ function handleLogout() {
       </div>
 
       <div class="flex items-center gap-3">
-        <span class="text-sm text-slate-500">
-          {{ userStore.fullName }}
-          <el-tag size="small" :type="userStore.isDoctor ? 'primary' : 'success'">
-            {{ userStore.isDoctor ? '医生' : '患者' }}
-          </el-tag>
-        </span>
+        <template v-if="userStore.isDoctor">
+          <el-avatar
+            :src="userStore.avatarUrl"
+            :size="32"
+            class="cursor-pointer hover:ring-2 hover:ring-blue-400 transition-all flex-shrink-0"
+            @click="openProfile"
+          >
+            {{ userStore.fullName?.charAt(0) }}
+          </el-avatar>
+          <span
+            class="text-sm text-slate-500 cursor-pointer hover:text-blue-600 transition-colors"
+            @click="openProfile"
+          >
+            {{ userStore.fullName }}
+            <el-tag size="small" type="primary">医生</el-tag>
+          </span>
+        </template>
+        <template v-else>
+          <span class="text-sm text-slate-500">
+            {{ userStore.fullName }}
+            <el-tag size="small" type="success">患者</el-tag>
+          </span>
+        </template>
         <el-button size="small" text @click="handleLogout">退出登录</el-button>
       </div>
     </el-header>
@@ -89,5 +116,8 @@ function handleLogout() {
         <router-view />
       </el-main>
     </el-container>
+
+    <!-- 医生个人信息弹窗 -->
+    <DoctorProfileDialog v-if="userStore.isDoctor" v-model="profileDialogVisible" />
   </el-container>
 </template>

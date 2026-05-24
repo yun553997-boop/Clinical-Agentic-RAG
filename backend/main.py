@@ -12,6 +12,7 @@ from api.endpoints.users import router as users_router
 from api.endpoints.knowledge import router as knowledge_router
 from api.endpoints.payment import router as payment_router
 from api.endpoints.prescription import router as prescription_router
+from api.endpoints.schedule import router as schedule_router
 from core.database import async_engine, run_migrations
 from models import Base
 
@@ -58,6 +59,7 @@ app.include_router(users_router, prefix="/api/users", tags=["用户查询"])
 app.include_router(knowledge_router, prefix="/api/knowledge", tags=["知识库管理"])
 app.include_router(payment_router, prefix="/api/payments", tags=["支付管理"])
 app.include_router(prescription_router, prefix="/api/prescriptions", tags=["处方管理"])
+app.include_router(schedule_router, prefix="/api/schedules", tags=["排班管理"])
 
 
 @app.get("/", tags=["健康检查"])

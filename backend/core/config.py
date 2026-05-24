@@ -35,7 +35,10 @@ class Settings(BaseSettings):
     # 应用运行端口
     APP_PORT: int = 8000
 
-    model_config = {"env_file": _ENV_FILE, "extra": "allow"}
+    model_config = {
+        "env_file": _ENV_FILE if os.path.isfile(_ENV_FILE) else None,
+        "extra": "allow",
+    }
 
 
 # 全局单例配置对象

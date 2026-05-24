@@ -1,7 +1,7 @@
 version: '3.8'
 
 services:
-  #数据库
+  # ── 数据库 ──
   postgres:
     image: postgres:16
     container_name: agentic_postgres
@@ -19,3 +19,27 @@ services:
       interval: 10s
       timeout: 5s
       retries: 5
+
+  # ── 后端 API ──
+  backend:
+    build: ./backend
+    container_name: agentic_backend
+    restart: unless-stopped
+    ports:
+      - "8000:8000"
+    environment:
+      DATABASE_URL: "postgresql+asyncpg://user:password@postgres:5432/agentic_db"
+      LLM_API_KEY: "sk-7b2fbd6af6eb45e8a52d53470dd322fa"
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  # ── 前端 (nginx) ──
+  frontend:
+    build: ./frontend
+    container_name: agentic_frontend
+    restart: unless-stopped
+    ports:
+      - "80:80"
+    depends_on:
+      - backend

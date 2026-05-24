@@ -48,6 +48,12 @@ const router = createRouter({
           component: () => import('@/views/doctor/KnowledgeBase.vue'),
           meta: { title: '指南知识库管理' },
         },
+        {
+          path: 'report',
+          name: 'DoctorReport',
+          component: () => import('@/views/doctor/AiReport.vue'),
+          meta: { title: 'AI 诊断报告' },
+        },
       ],
     },
 

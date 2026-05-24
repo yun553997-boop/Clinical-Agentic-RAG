@@ -35,7 +35,7 @@ class Appointment(Base):
     ai_report: Mapped[str | None] = mapped_column(Text, nullable=True)
     doctor_advice: Mapped[str | None] = mapped_column(Text, nullable=True)
     paid: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
-    payment_method: Mapped[str | None] = mapped_column(String(16), nullable=True)
+    payment_method: Mapped[str] = mapped_column(String(16), nullable=False, default='', server_default='')
 
     patient: Mapped["User"] = relationship(
         back_populates="appointments_as_patient", foreign_keys=[patient_id]

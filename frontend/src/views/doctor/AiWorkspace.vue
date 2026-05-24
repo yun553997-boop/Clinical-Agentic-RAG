@@ -1,19 +1,13 @@
 <script setup lang="ts">
-import { ref, nextTick, watch, onMounted, computed } from 'vue'
+import { ref, onMounted, onUnmounted, computed } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
-import MarkdownIt from 'markdown-it'
 import request from '@/utils/request'
-import PrescriptionForm from '@/components/PrescriptionForm.vue'
-import type { PrescriptionData, MedicationItem } from '@/components/PrescriptionForm.vue'
+import PrescriptionPad from '@/components/PrescriptionPad.vue'
+import type { PrescriptionData, MedicationItem } from '@/components/PrescriptionPad.vue'
 
 const route = useRoute()
 const router = useRouter()
-
-const md = new MarkdownIt({
-  breaks: true,
-  linkify: true,
-})
 
 // ── appointment_id ──
 const appointmentId = computed(() => {
@@ -22,7 +16,7 @@ const appointmentId = computed(() => {
   return null
 })
 
-// ── 表单数据 ──
+// ── 患者信息表单 ──
 const form = ref({
   name: '',
   age: undefined as number | undefined,
@@ -37,17 +31,14 @@ onMounted(() => {
   if (route.query.symptoms) {
     form.value.symptoms = route.query.symptoms as string
   }
+  // 检查 localStorage 中是否有 AI 报告
+  checkLocalReport()
 })
 
 // ── UI 状态 ──
-const loading = ref(false)
 const submitting = ref(false)
-const toolLogs = ref<{ text: string; kind: string }[]>([])
-const finalReport = ref('')
-const renderedReport = ref('')
-const activeCollapse = ref<string[]>([])
-const terminalRef = ref<HTMLElement | null>(null)
-const reportRef = ref<HTMLElement | null>(null)
+const hasAiReport = ref(false)
+const aiReportContent = ref('')
 
 // ── 处方数据 ──
 const prescription = ref<PrescriptionData>({
@@ -59,122 +50,51 @@ const prescription = ref<PrescriptionData>({
 })
 const prescriptionFilled = ref(false)
 
-// ── 终端自动滚动 ──
-watch(
-  () => toolLogs.value.length,
-  async () => {
-    await nextTick()
-    if (terminalRef.value) {
-      terminalRef.value.scrollTop = terminalRef.value.scrollHeight
+// ── 检查 localStorage 中的报告 ──
+function checkLocalReport() {
+  const report = localStorage.getItem('ai_report_latest')
+  if (report) {
+    aiReportContent.value = report
+    hasAiReport.value = true
+  }
+}
+
+// ── 跨窗口事件监听 ──
+function handleStorageEvent(e: StorageEvent) {
+  if (e.key === 'ai_report_latest' && e.newValue) {
+    aiReportContent.value = e.newValue
+    hasAiReport.value = true
+    ElMessage.success('AI 诊断报告已生成，可一键填入处方')
+  }
+}
+
+function handleMessageEvent(e: MessageEvent) {
+  if (e.origin !== window.location.origin) return
+  if (e.data?.type === 'ai_report_ready') {
+    const report = localStorage.getItem('ai_report_latest')
+    if (report) {
+      aiReportContent.value = report
+      hasAiReport.value = true
+      ElMessage.success('AI 诊断报告已同步，可一键填入处方')
     }
   }
-)
+}
 
-// ── 报告自动滚动 ──
-watch(finalReport, async () => {
-  await nextTick()
-  if (reportRef.value) {
-    reportRef.value.scrollTop = reportRef.value.scrollHeight
-  }
+onMounted(() => {
+  window.addEventListener('storage', handleStorageEvent)
+  window.addEventListener('message', handleMessageEvent)
 })
 
-// ── 构建问诊 query ──
-function buildQuery(): string {
-  const parts: string[] = []
-  if (form.value.name) parts.push(`患者姓名：${form.value.name}`)
-  if (form.value.age) parts.push(`患者年龄：${form.value.age} 岁`)
-  if (form.value.history) parts.push(`基础病史：${form.value.history}`)
-  parts.push(`主诉 / 当前症状描述：${form.value.symptoms}`)
-  parts.push('请基于以上患者信息，按照推荐工作流程进行分析并生成诊疗辅助报告。')
-  return parts.join('\n')
-}
-
-// ── 处理 SSE 事件 ──
-function handleSSEEvent(event: { type: string; data?: string }) {
-  switch (event.type) {
-    case 'tool_log':
-      toolLogs.value.push({ text: event.data || '', kind: 'log' })
-      break
-    case 'final_answer':
-      finalReport.value += event.data || ''
-      renderedReport.value = md.render(finalReport.value)
-      break
-    case 'done':
-      break
-  }
-}
-
-// ── 核心：SSE 流式请求 ──
-async function startConsultation() {
-  if (!form.value.symptoms.trim()) {
-    ElMessage.warning('请输入患者当前症状描述')
-    return
-  }
-
-  loading.value = true
-  toolLogs.value = []
-  finalReport.value = ''
-  renderedReport.value = ''
-  prescriptionFilled.value = false
-
-  toolLogs.value.push({
-    text: '🚀 正在连接 AI 临床诊疗服务...\n',
-    kind: 'system',
-  })
-
-  try {
-    const response = await fetch('/api/chat/agent', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ query: buildQuery() }),
-    })
-
-    if (!response.ok) {
-      throw new Error(`服务器返回 HTTP ${response.status}`)
-    }
-
-    const reader = response.body!.getReader()
-    const decoder = new TextDecoder()
-    let buffer = ''
-
-    while (true) {
-      const { done, value } = await reader.read()
-      if (done) break
-
-      buffer += decoder.decode(value, { stream: true })
-      const lines = buffer.split('\n')
-      buffer = lines.pop() || ''
-
-      for (const line of lines) {
-        const trimmed = line.trim()
-        if (trimmed.startsWith('data: ')) {
-          try {
-            const event = JSON.parse(trimmed.slice(6))
-            handleSSEEvent(event)
-          } catch {
-            // 忽略不完整的 JSON
-          }
-        }
-      }
-    }
-  } catch (err: unknown) {
-    const msg = err instanceof Error ? err.message : String(err)
-    ElMessage.error(`连接失败：${msg}`)
-    toolLogs.value.push({
-      text: `\n❌ 连接错误：${msg}`,
-      kind: 'error',
-    })
-  } finally {
-    loading.value = false
-  }
-}
+onUnmounted(() => {
+  window.removeEventListener('storage', handleStorageEvent)
+  window.removeEventListener('message', handleMessageEvent)
+})
 
 // ── 从 AI 报告解析处方数据 ──
 function parsePrescriptionFromReport(): PrescriptionData | null {
-  const text = finalReport.value
+  const text = aiReportContent.value
   if (!text) return null
 
-  // 尝试匹配 JSON 代码块
   const jsonBlockRegex = /```json\s*([\s\S]*?)```/g
   let match: RegExpExecArray | null
 
@@ -182,7 +102,6 @@ function parsePrescriptionFromReport(): PrescriptionData | null {
     try {
       const parsed = JSON.parse(match[1])
       if (parsed.medications && Array.isArray(parsed.medications)) {
-        // 确保每个药品都有完整字段
         const medications: MedicationItem[] = parsed.medications.map((m: Record<string, unknown>) => ({
           drug_name: String(m.drug_name || ''),
           specification: String(m.specification || ''),
@@ -202,7 +121,6 @@ function parsePrescriptionFromReport(): PrescriptionData | null {
     }
   }
 
-  // 尝试直接匹配包含 "prescriptions" 或 "medications" 的 JSON 对象
   const jsonObjRegex = /\{[\s\S]*"medications"[\s\S]*\}/g
   while ((match = jsonObjRegex.exec(text)) !== null) {
     try {
@@ -242,35 +160,56 @@ function autoFillPrescription() {
   }
 }
 
+// ── 打开 AI 会诊新窗口 ──
+function startConsultation() {
+  if (!form.value.symptoms.trim()) {
+    ElMessage.warning('请输入患者当前症状描述')
+    return
+  }
+
+  const params = new URLSearchParams()
+  if (form.value.name) params.set('name', form.value.name)
+  if (form.value.age) params.set('age', String(form.value.age))
+  if (form.value.history) params.set('history', form.value.history)
+  params.set('symptoms', form.value.symptoms)
+  if (appointmentId.value) params.set('appointment_id', String(appointmentId.value))
+
+  const url = `/doctor/report?${params.toString()}`
+  window.open(url, '_blank')
+  ElMessage.success('AI 会诊报告已在新窗口中打开，完成后将自动同步处方数据')
+}
+
 // ── 提交处方并完成会诊 ──
 async function submitPrescription() {
-  // 验证处方
   const validMeds = prescription.value.medications.filter((m) => m.drug_name.trim())
   if (validMeds.length === 0) {
     ElMessage.warning('请至少填写一种药品')
     return
   }
   if (!appointmentId.value) {
-    ElMessage.error('未关联挂号单 ID，无法提交')
+    ElMessage.error('未关联挂号单 ID，请从今日候诊列表进入')
+    return
+  }
+  if (!aiReportContent.value) {
+    ElMessage.warning('请先通过 AI 会诊生成诊断报告')
     return
   }
 
   submitting.value = true
   try {
-    // 1. 保存处方
     await request.post(`/api/prescriptions/${appointmentId.value}`, {
       diagnosis: prescription.value.diagnosis,
       medications: validMeds,
       notes: prescription.value.notes || null,
     })
 
-    // 2. 提交 AI 报告并标记完成
     await request.put(`/api/appointments/${appointmentId.value}/submit`, {
-      ai_report: finalReport.value,
+      ai_report: aiReportContent.value,
       doctor_advice: null,
     })
 
     ElMessage.success('处方已提交，报告已发送给患者')
+    localStorage.removeItem('ai_report_latest')
     router.push('/doctor/dashboard')
   } catch {
     ElMessage.error('提交失败，请重试')
@@ -279,24 +218,24 @@ async function submitPrescription() {
   }
 }
 
-// ── 重置表单 ──
+// ── 重置 ──
 function resetForm() {
   form.value = { name: '', age: undefined, history: '', symptoms: '' }
-  toolLogs.value = []
-  finalReport.value = ''
-  renderedReport.value = ''
   prescription.value = {
     diagnosis: '',
     medications: [{ drug_name: '', specification: '', dosage: '', usage_method: '口服', frequency: '每日1次', days: 7 }],
     notes: '',
   }
   prescriptionFilled.value = false
+  hasAiReport.value = false
+  aiReportContent.value = ''
+  localStorage.removeItem('ai_report_latest')
 }
 </script>
 
 <template>
   <div class="h-screen flex bg-slate-100 overflow-hidden">
-    <!-- ══════════════════════════ 左侧：病历工作区 ══════════════════════════ -->
+    <!-- ══════════════════════════ 左侧：患者病历工作区 ══════════════════════════ -->
     <aside class="w-[420px] flex-shrink-0 flex flex-col p-5 gap-4">
       <!-- 标题栏 -->
       <div class="flex items-center gap-3 mb-1">
@@ -328,41 +267,37 @@ function resetForm() {
           class="h-full flex flex-col"
           @submit.prevent="startConsultation"
         >
-          <!-- 患者姓名 -->
           <el-form-item label="患者姓名">
             <el-input
               v-model="form.name"
               placeholder="请输入患者姓名（选填）"
-              :disabled="loading"
+              :disabled="submitting"
               clearable
             />
           </el-form-item>
 
-          <!-- 年龄 -->
           <el-form-item label="年龄">
             <el-input-number
               v-model="form.age"
               :min="0"
               :max="150"
               placeholder="岁"
-              :disabled="loading"
+              :disabled="submitting"
               controls-position="right"
               class="w-full"
             />
           </el-form-item>
 
-          <!-- 基础病史 -->
           <el-form-item label="基础病史">
             <el-input
               v-model="form.history"
               type="textarea"
               :rows="3"
               placeholder="如：高血压病史 10 年、2 型糖尿病 5 年……"
-              :disabled="loading"
+              :disabled="submitting"
             />
           </el-form-item>
 
-          <!-- 当前症状 -->
           <el-form-item label="当前症状描述" required>
             <el-input
               v-model="form.symptoms"
@@ -370,26 +305,24 @@ function resetForm() {
               :rows="5"
               placeholder="请详细描述患者当前主诉、症状、体征、检查结果等……
         示例：患者近一周出现头晕、视物模糊，自测血压 165/95 mmHg，空腹血糖 8.2 mmol/L……"
-              :disabled="loading"
+              :disabled="submitting"
             />
           </el-form-item>
 
-          <!-- 按钮组 -->
           <div class="mt-auto pt-3 flex gap-3">
             <el-button
               type="primary"
               size="large"
               class="flex-1 h-11 font-semibold text-base"
-              :loading="loading"
               :disabled="!form.symptoms.trim()"
               @click="startConsultation"
             >
-              {{ loading ? 'AI 正在分析中…' : '🧠 请求 AI 会诊' }}
+              🧠 请求 AI 会诊
             </el-button>
             <el-button
               size="large"
               class="h-11"
-              :disabled="loading"
+              :disabled="submitting"
               @click="resetForm"
             >
               重置
@@ -398,7 +331,6 @@ function resetForm() {
         </el-form>
       </el-card>
 
-      <!-- 底部提示 -->
       <div
         class="text-xs text-slate-400 text-center leading-relaxed flex-shrink-0"
       >
@@ -406,166 +338,56 @@ function resetForm() {
       </div>
     </aside>
 
-    <!-- ══════════════════════════ 右侧：AI 思考与输出区 ══════════════════════════ -->
+    <!-- ══════════════════════════ 右侧：传统处方筏 ══════════════════════════ -->
     <main class="flex-1 flex flex-col p-5 pl-0 gap-4 min-w-0 overflow-y-auto">
-      <!-- 上半部分：Agent 执行日志（折叠面板） -->
-      <el-collapse v-model="activeCollapse">
-        <el-collapse-item title="⚙️ 查看 AI 思考与工具调用过程" name="logs">
-          <div
-            ref="terminalRef"
-            class="terminal-scroll bg-[#0d1117] text-green-400 font-mono text-sm p-4 overflow-y-auto whitespace-pre-wrap break-words leading-relaxed max-h-[300px]"
-          >
-            <!-- 空状态 -->
-            <div
-              v-if="toolLogs.length === 0"
-              class="text-slate-500 flex items-center justify-center h-full"
-            >
-              <div class="text-center">
-                <div class="text-3xl mb-3">🖥️</div>
-                <div>Agent 执行日志将在此实时显示</div>
-                <div class="text-xs mt-1 text-slate-600">
-                  请在左侧输入患者信息后点击「请求 AI 会诊」
-                </div>
-              </div>
-            </div>
-
-            <!-- 日志条目 -->
-            <template v-for="(log, i) in toolLogs" :key="i">
-              <span
-                v-if="log.kind === 'system'"
-                class="text-cyan-400"
-              >{{ log.text }}</span>
-              <span
-                v-else-if="log.kind === 'error'"
-                class="text-red-400"
-              >{{ log.text }}</span>
-              <span
-                v-else
-              >{{ log.text }}</span>
-            </template>
-
-            <!-- 光标闪烁（正在输出中） -->
-            <span
-              v-if="loading"
-              class="inline-block w-2 h-4 bg-green-400 animate-pulse align-middle ml-0.5"
-            >&nbsp;</span>
-          </div>
-        </el-collapse-item>
-      </el-collapse>
-
-      <!-- 下半部分：最终报告 -->
-      <el-card
-        shadow="hover"
-        :body-style="{
-          padding: 0,
-          overflow: 'hidden',
-        }"
+      <!-- AI 报告状态指示 -->
+      <div
+        v-if="!hasAiReport"
+        class="bg-blue-50 border border-blue-200 rounded-lg p-4 flex items-center gap-3"
       >
-        <template #header>
-          <div class="flex items-center gap-2 text-medical-800 font-semibold">
-            <span class="text-lg">📄</span>
-            <span>智能诊疗辅助报告</span>
-            <el-tag
-              v-if="loading"
-              type="info"
-              size="small"
-              effect="dark"
-              round
-            >
-              生成中
-            </el-tag>
-            <el-tag
-              v-else-if="finalReport"
-              type="success"
-              size="small"
-              effect="dark"
-              round
-            >
-              报告就绪
-            </el-tag>
+        <span class="text-2xl">ℹ️</span>
+        <div class="flex-1">
+          <div class="text-blue-800 font-semibold text-sm">尚未获取 AI 诊断报告</div>
+          <div class="text-blue-600 text-xs mt-0.5">
+            请在左侧填写患者信息后点击「请求 AI 会诊」，AI 报告将在新窗口中生成
           </div>
-        </template>
-
-        <!-- 报告内容区 -->
-        <div
-          ref="reportRef"
-          class="overflow-y-auto p-6 bg-white"
-        >
-          <!-- 空状态 -->
-          <div
-            v-if="!finalReport && !loading"
-            class="text-slate-400 flex items-center justify-center h-full py-12"
-          >
-            <div class="text-center">
-              <div class="text-3xl mb-3">📄</div>
-              <div>AI 诊疗辅助报告将在此渲染</div>
-              <div class="text-xs mt-1 text-slate-400">
-                Markdown 格式的结构化报告
-              </div>
-            </div>
-          </div>
-
-          <!-- 加载骨架 -->
-          <div v-else-if="loading && !finalReport" class="space-y-4 animate-pulse">
-            <div class="h-6 bg-slate-200 rounded w-1/3"></div>
-            <div class="h-4 bg-slate-100 rounded w-full"></div>
-            <div class="h-4 bg-slate-100 rounded w-4/5"></div>
-            <div class="h-6 bg-slate-200 rounded w-1/2 mt-6"></div>
-            <div class="h-4 bg-slate-100 rounded w-full"></div>
-            <div class="h-4 bg-slate-100 rounded w-3/4"></div>
-          </div>
-
-          <!-- Markdown 渲染 -->
-          <div
-            v-else
-            class="markdown-body"
-            v-html="renderedReport"
-          ></div>
         </div>
-      </el-card>
-
-      <!-- 处方筏表单（AI 报告生成后显示） -->
-      <el-card
-        v-if="finalReport"
-        shadow="hover"
+      </div>
+      <div
+        v-else
+        class="bg-green-50 border border-green-200 rounded-lg p-4 flex items-center gap-3"
       >
-        <template #header>
-          <div class="flex items-center justify-between text-medical-800 font-semibold">
-            <div class="flex items-center gap-2">
-              <span class="text-lg">📝</span>
-              <span>传统处方筏</span>
-              <el-tag v-if="prescriptionFilled" type="success" size="small" effect="dark" round>
-                已填入
-              </el-tag>
-            </div>
-            <el-button
-              type="primary"
-              size="small"
-              :disabled="loading"
-              @click="autoFillPrescription"
-            >
-              🤖 从 AI 报告一键填入处方
-            </el-button>
-          </div>
-        </template>
+        <span class="text-2xl">✅</span>
+        <div class="flex-1">
+          <div class="text-green-800 font-semibold text-sm">AI 诊断报告已就绪</div>
+          <div class="text-green-600 text-xs mt-0.5">可点击「从 AI 报告一键填入」自动填写处方</div>
+        </div>
+      </div>
 
-        <PrescriptionForm
-          v-model="prescription"
-          :disabled="submitting"
-        />
-      </el-card>
+      <!-- 处方筏 -->
+      <PrescriptionPad
+        v-model="prescription"
+        :disabled="submitting"
+        :patient-name="form.name"
+        :patient-age="form.age"
+        :prescription-filled="prescriptionFilled"
+        :appointment-id="appointmentId"
+        :has-ai-report="hasAiReport"
+        :submitting="submitting"
+        @auto-fill="autoFillPrescription"
+      />
 
       <!-- 提交按钮 -->
-      <div
-        v-if="finalReport"
-        class="flex items-center justify-between bg-white rounded-lg p-4 shadow"
-      >
+      <div class="flex items-center justify-between bg-white rounded-lg p-4 shadow flex-shrink-0">
         <div
           v-if="!appointmentId"
           class="text-amber-600 text-sm flex items-center gap-2"
         >
           <span>⚠️</span>
-          <span>未关联挂号单 ID，请从候诊列表进入</span>
+          <span>未关联挂号单 ID，请从今日候诊列表进入</span>
+        </div>
+        <div v-else-if="!hasAiReport" class="text-sm text-slate-500">
+          请先通过 AI 会诊生成诊断报告
         </div>
         <div v-else class="text-sm text-slate-500">
           确认处方信息无误后提交给患者
@@ -574,7 +396,7 @@ function resetForm() {
           type="primary"
           size="large"
           :loading="submitting"
-          :disabled="!appointmentId || !finalReport"
+          :disabled="!appointmentId || !hasAiReport"
           @click="submitPrescription"
         >
           {{ submitting ? '提交中…' : '📋 提交处方给患者' }}

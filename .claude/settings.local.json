@@ -40,7 +40,9 @@
       "PowerShell(Get-NetTCPConnection *)",
       "PowerShell(Test-Path *)",
       "PowerShell(Get-ChildItem -Path \"D:\\\\Wed-dev\\\\xiangmulianxi\\\\Clinical Agentic RAG\\\\backend\" -Depth 0 | ForEach-Object { $_.Name })",
-      "PowerShell(Get-ChildItem -Path \"D:\\\\Wed-dev\\\\xiangmulianxi\\\\Clinical Agentic RAG\\\\.vscode\" | ForEach-Object { $_.Name })"
+      "PowerShell(Get-ChildItem -Path \"D:\\\\Wed-dev\\\\xiangmulianxi\\\\Clinical Agentic RAG\\\\.vscode\" | ForEach-Object { $_.Name })",
+      "PowerShell(docker compose up *)",
+      "PowerShell(docker exec agentic_frontend *)"
     ]
   }
 }

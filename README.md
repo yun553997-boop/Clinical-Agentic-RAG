@@ -141,4 +141,3 @@ Clinical-Agentic-RAG/
 ```
 
 nginx 反向代理使前后端同源，无需配置 CORS。
-
